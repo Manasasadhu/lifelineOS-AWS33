@@ -9,6 +9,7 @@
     "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {
+    "@lifeline/engine": "*",
     "@aws-sdk/client-bedrock-runtime": "^3.705.0",
     "@aws-sdk/client-dynamodb": "^3.705.0",
     "@aws-sdk/client-eventbridge": "^3.705.0",

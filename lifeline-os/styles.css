@@ -347,3 +347,9 @@ img { max-width: 100%; }
     .rail .spacer, .conn { display: none; } .alertbar .seismo { display: none; }
     .metrics { grid-template-columns: repeat(2, 1fr); } .specs, .abtns { grid-template-columns: 1fr; } .bar { grid-template-columns: 92px 1fr 48px; }
   }
+
+/* ---- API connection badge (live backend indicator) ---- */
+.apibadge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid color-mix(in srgb,var(--muted) 30%,transparent);font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.04em;color:var(--muted)}
+.apiDot{width:8px;height:8px;border-radius:50%;display:inline-block;box-shadow:0 0 0 0 transparent;transition:background .3s,box-shadow .3s}
+.apiDot.on{background:#2FD98A;box-shadow:0 0 8px 1px rgba(47,217,138,.6)}
+.apiDot.off{background:#FF4D64;box-shadow:0 0 8px 1px rgba(255,77,100,.5)}

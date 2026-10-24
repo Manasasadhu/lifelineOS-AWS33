@@ -4,6 +4,37 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* ================= API LAYER ================= *
+   * Connects the UI to the Lifeline backend. If the backend is unreachable,
+   * the UI silently keeps its built-in mock behavior (graceful degradation).
+   * Override the base URL with ?api=http://host:port in the address bar. */
+  var API_BASE = (function () {
+    try {
+      var q = new URLSearchParams(location.search).get("api");
+      if (q) return q.replace(/\/$/, "");
+    } catch (e) {}
+    return "http://localhost:3001";
+  })();
+  var API = { live: false, lastState: null };
+
+  function apiFetch(path, opts) {
+    return fetch(API_BASE + path, Object.assign({
+      headers: { "content-type": "application/json" },
+    }, opts || {})).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status + " " + path);
+      return r.json();
+    });
+  }
+
+  function setApiStatus(live) {
+    API.live = live;
+    var el = document.getElementById("apiDot");
+    if (!el) return;
+    el.className = "apiDot " + (live ? "on" : "off");
+    el.title = live ? "Backend connected · " + API_BASE : "Backend offline · using local mock";
+  }
+  /* ============================================= */
+
   /* ---------- Theme ---------- */
   var SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
   var MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
@@ -209,22 +240,74 @@
   $$(".abtn.decline").forEach(function (b) { b.addEventListener("click", function () { toast("warn", "Action declined", "Escalated to human coordinator"); }); });
 
   /* ---------- Request parse ---------- */
+  var NEED_LABEL = { insulin: "Insulin / Medication", medication: "Insulin / Medication", meals: "Food Supply", food: "Food Supply", water: "Water", power: "Power / Electricity", transport: "Transportation", unknown: "General assistance" };
+  var PRI_LABEL = { critical: "Critical", high: "High", medium: "Moderate", low: "Low" };
+  var PRI_COLOR = { critical: "var(--crit)", high: "var(--risk)", medium: "var(--warn)", low: "var(--good)" };
+
+  /* Render the interpretation panel from a backend `parsed` object. */
+  function renderParsed(parsed, matchedAction) {
+    var interp = $("#interp");
+    var need = NEED_LABEL[(parsed.need || "unknown").toLowerCase()] || parsed.need;
+    var pri = PRI_LABEL[parsed.urgency] || parsed.urgency;
+    var priC = PRI_COLOR[parsed.urgency] || "var(--warn)";
+    var pow = parsed.powerAvailable === false ? "No" : parsed.powerAvailable === true ? "Yes" : "Unknown";
+    var powC = parsed.powerAvailable === false ? "var(--crit)" : parsed.powerAvailable === true ? "var(--good)" : "var(--muted)";
+    $("#iNeed").textContent = need;
+    $("#iPri").textContent = pri; $("#iPri").style.color = priC;
+    $("#iPpl").textContent = parsed.people != null ? parsed.people : 1;
+    $("#iPow").textContent = pow; $("#iPow").style.color = powC;
+    if ($("#iLoc")) $("#iLoc").textContent = parsed.location || "—";
+    var matchMsg = matchedAction
+      ? "Matched → " + matchedAction.toFacilityId + " · " + matchedAction.item + " ×" + matchedAction.quantity
+      : "Request added to emergency network";
+    $("#iOk").textContent = matchMsg;
+    interp.classList.remove("load");
+    // Honestly reflect whether Bedrock or the rules parser produced this.
+    $("#interpSrc").textContent = parsed.source === "bedrock" ? "Amazon Bedrock" : "Local rules parser";
+    toast(parsed.urgency === "critical" ? "crit" : "good",
+      parsed.source === "bedrock" ? "Parsed by Amazon Bedrock" : "Parsed by local rules",
+      need + " · priority " + pri);
+  }
+
+  /* Mock fallback used only when the backend is offline. */
+  function mockParse(txt) {
+    var lower = txt.toLowerCase();
+    var out = { need: "unknown", urgency: "medium", people: 1, powerAvailable: null, location: "Downtown San José", source: "rules" };
+    var m = lower.match(/(\d+)\s*(people|persons|residents|meals|ppl)/);
+    if (/insulin|medic|diabet|prescription|refriger/.test(lower)) { out.need = "insulin"; out.urgency = "critical"; }
+    else if (/food|meal|hungry|eat/.test(lower)) { out.need = "meals"; out.urgency = "high"; }
+    else if (/water|thirst/.test(lower)) { out.need = "water"; out.urgency = "high"; }
+    if (/no power|power out|power went|no electric|outage|blackout/.test(lower)) out.powerAvailable = false;
+    else if (/power|electric/.test(lower)) out.powerAvailable = true;
+    if (m) out.people = parseInt(m[1], 10);
+    return out;
+  }
+
   $("#reqBtn").addEventListener("click", function () {
-    var txt = ($("#reqText").value || "").toLowerCase(), interp = $("#interp"), src = $("#interpSrc");
-    interp.classList.add("load"); src.innerHTML = '<span class="thinking">Bedrock analyzing…</span>'; beep(500, .08, "sine", .04);
-    setTimeout(function () {
-      var need = "General assistance", pri = "Moderate", priC = "var(--warn)", pow = "Unknown", powC = "var(--muted)", ppl = "1", match = "Routing to nearest available resource";
-      var m = txt.match(/(\d+)\s*(people|persons|residents|meals|ppl)/);
-      if (/insulin|medic|diabet|prescription|refriger/.test(txt)) { need = "Insulin / Medication"; pri = "Critical"; priC = "var(--crit)"; match = "Matched to Community Center D cold storage"; }
-      else if (/food|meal|hungry|eat/.test(txt)) { need = "Food Supply"; pri = "High"; priC = "var(--risk)"; match = "Matched to Grocery Store E surplus"; }
-      else if (/water|thirst/.test(txt)) { need = "Water"; pri = "High"; priC = "var(--risk)"; }
-      else if (/shelter|cold|roof|house/.test(txt)) { need = "Shelter"; pri = "High"; priC = "var(--risk)"; match = "Matched to Shelter C"; }
-      if (/no power|power out|power went|no electric|outage|blackout/.test(txt)) { pow = "No"; powC = "var(--crit)"; } else if (/power|electric/.test(txt)) { pow = "Yes"; powC = "var(--good)"; }
-      if (m) ppl = m[1];
-      $("#iNeed").textContent = need; $("#iPri").textContent = pri; $("#iPri").style.color = priC; $("#iPpl").textContent = ppl; $("#iPow").textContent = pow; $("#iPow").style.color = powC;
-      $("#iOk").textContent = match + " — added to emergency network"; interp.classList.remove("load"); src.textContent = "Amazon Bedrock";
-      var r = $("#tReq"); r.textContent = parseInt(r.textContent, 10) + 1; toast("good", "Request parsed by Bedrock", need + " · priority " + pri);
-    }, 1200);
+    var txt = $("#reqText").value || "";
+    var interp = $("#interp");
+    interp.classList.add("load");
+    $("#interpSrc").innerHTML = '<span class="thinking">Analyzing…</span>';
+    beep(500, .08, "sine", .04);
+
+    if (!API.live) {
+      // Backend offline → keep the original mock behavior, same 1.2s feel.
+      setTimeout(function () { renderParsed(mockParse(txt)); }, 1200);
+      return;
+    }
+
+    apiFetch("/requests", { method: "POST", body: JSON.stringify({ text: txt }) })
+      .then(function (res) {
+        var matched = (res.state.actions || []).slice(-1)[0];
+        // Only treat the newest action as "matched" if it references this request.
+        var isMatch = matched && /citizen request/i.test(matched.reason || "");
+        renderParsed(res.parsed, isMatch ? matched : null);
+        renderState(res.state); // refresh tiles / queue / network from new state
+      })
+      .catch(function (err) {
+        interp.classList.remove("load");
+        toast("crit", "Request failed", err.message);
+      });
   });
 
   /* ---------- Cloud / Edge ---------- */
@@ -236,4 +319,193 @@
     else { $("#connState").textContent = "Cloud Online"; $("#connSub").textContent = "Bedrock · all services live"; $("#pillTxt").textContent = "Cloud Online"; $("#connBtn").textContent = "Disconnect Cloud"; $("#interpSrc").textContent = "Amazon Bedrock"; $("#syncTxt").textContent = "Synchronizing 7 events…";
       chord([440, 587]); toast("", "Reconnecting to cloud", "Syncing locally-stored events…"); setTimeout(function () { toast("good", "Synchronization complete", "7 offline events merged to network"); }, 1800); }
   });
+
+  /* ================= LIVE RENDER (backend-driven) ================= *
+   * Approach A: render whatever /state returns. Clocks/tiles/queue/table
+   * are overwritten from real data when the backend is reachable. */
+
+  var SEV_LABEL = { critical: "Critical", at_risk: "At Risk", warning: "Limited", healthy: "Stable" };
+  var SEV_CLASS = { critical: "crit", at_risk: "risk", warning: "warn", healthy: "good" };
+
+  function fmtClock(s) { if (s == null) return "—"; if (s < 0) s = 0; var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? h + "h " + m + "m" : m + "m"; }
+
+  function setTile(sel, val) { var el = $(sel); if (!el) return; el.dataset.done = ""; el.setAttribute("data-count", val); el.textContent = Number(val).toLocaleString(); }
+
+  function renderTiles(st) {
+    var m = st.metrics || {};
+    setTile(".tile.t-people .v", m.peopleAffected != null ? m.peopleAffected : 0);
+    setTile("#tReq", m.requestsActive != null ? m.requestsActive : 0);
+    setTile(".tile.t-res .v", m.resourcesAvailable != null ? m.resourcesAvailable : 0);
+    setTile("#tCrit", m.criticalAlerts != null ? m.criticalAlerts : 0);
+  }
+
+  function renderQueue(st) {
+    var q = $("#queue"); if (!q) return;
+    var items = (st.priorityQueue || []);
+    if (!items.length) { q.innerHTML = '<div class="qitem"><div class="qt"><div class="n">All clear</div><div class="d">No active survival clocks</div></div></div>'; return; }
+    q.innerHTML = items.map(function (a) {
+      var cls = SEV_CLASS[a.severity] || "warn";
+      var secs = a.remainingSeconds != null ? a.remainingSeconds : 0;
+      var total = Math.max(secs, 3600);
+      return '<div class="qitem sev ' + cls + '"><div class="qt"><div class="n">' + a.title + '</div><div class="d">' + (a.subtitle || "") + '</div></div><div class="gauge" data-secs="' + secs + '" data-total="' + total + '"></div></div>';
+    }).join("");
+    initGauges(q);
+  }
+
+  function renderNetwork(st) {
+    var tb = $("table.net tbody"); if (!tb) return;
+    tb.innerHTML = (st.facilities || []).map(function (f) {
+      var cls = SEV_CLASS[f.status] || "good";
+      var label = f.type === "volunteer" ? "Available" : (SEV_LABEL[f.status] || "Stable");
+      var resource = f.inventory && f.inventory.length ? (f.inventory[0].quantity + " " + f.inventory[0].unit) : (f.type === "volunteer" ? "Vehicle" : (f.notes || "—"));
+      var power = f.type === "volunteer" ? "—" : (f.power ? "Grid" : "Battery");
+      var secs = f.failureAt ? Math.max(0, Math.round((Date.parse(f.failureAt) - Date.now()) / 1000)) : (f.refrigerationHoursRemaining != null ? Math.round(f.refrigerationHoursRemaining * 3600) : null);
+      var time = f.type === "volunteer" ? "—" : fmtClock(secs);
+      var badge = f.type === "volunteer"
+        ? '<span class="badge" style="--c:var(--accent);--cb:color-mix(in srgb,var(--accent) 14%,transparent)"><span class="bd"></span>Available</span>'
+        : '<span class="badge sev ' + cls + '"><span class="bd"></span>' + label + '</span>';
+      return '<tr><td>' + f.name + '</td><td>' + badge + '</td><td>' + resource + '</td><td>' + power + '</td><td class="tleft">' + time + '</td></tr>';
+    }).join("");
+  }
+
+  /* rebuild gauge rings for any .gauge inside root that has no svg yet */
+  function initGauges(root) {
+    var R = 24, C = 2 * Math.PI * R;
+    $$(".gauge", root).forEach(function (el) {
+      if (el.querySelector("svg")) return;
+      var secs = parseInt(el.getAttribute("data-secs"), 10) || 0, total = parseInt(el.getAttribute("data-total"), 10) || secs || 1;
+      el.innerHTML = '<svg viewBox="0 0 58 58"><circle class="gtrack" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5"/><circle class="gprog" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5" stroke-dasharray="' + C + '" stroke-dashoffset="0"/></svg><div class="gt"></div>';
+      el._live = { prog: el.querySelector(".gprog"), txt: el.querySelector(".gt"), secs: secs, total: total, C: C };
+      el._live.txt.textContent = Math.floor(secs / 60) + "m";
+    });
+  }
+
+  /* tick the live gauges created above */
+  setInterval(function () {
+    $$(".gauge").forEach(function (el) {
+      if (!el._live) return;
+      var g = el._live;
+      if (g.secs > 0) g.secs--;
+      g.txt.textContent = Math.floor(g.secs / 60) + "m";
+      g.prog.style.strokeDashoffset = (g.C * (1 - g.secs / g.total)).toFixed(1);
+    });
+  }, 1000);
+
+  var ACT_SEV_CLASS = { critical: "crit", at_risk: "risk", warning: "warn" };
+  var ACT_SEV_LABEL = { critical: "Critical Action", at_risk: "At-Risk Action", warning: "Action" };
+
+  function facilityNameOf(st, id) {
+    var f = (st.facilities || []).find(function (x) { return x.id === id; });
+    return f ? f.name : id;
+  }
+
+  /* Render the Actions screen from real backend actions, binding real IDs. */
+  function renderActions(st) {
+    var wrap = $(".actionwrap"); if (!wrap) return;
+    var actions = (st.actions || []).filter(function (a) {
+      return a.status === "pending" || a.status === "approved" || a.status === "completed";
+    });
+    var pendingCount = actions.filter(function (a) { return a.status === "pending"; }).length;
+
+    var badge = $("#navBadge");
+    if (badge) {
+      if (pendingCount > 0) { badge.textContent = pendingCount; badge.classList.remove("hide"); }
+      else badge.classList.add("hide");
+    }
+
+    if (!actions.length) {
+      wrap.innerHTML = '<div class="action"><div class="body" style="padding:28px;text-align:center;color:var(--muted)">No interventions queued. Run a simulation or submit a request.</div></div>';
+      return;
+    }
+
+    wrap.innerHTML = actions.map(function (a) {
+      var cls = ACT_SEV_CLASS[a.severity] || "warn";
+      var done = a.status !== "pending";
+      var fromName = facilityNameOf(st, a.fromFacilityId);
+      var toName = facilityNameOf(st, a.toFacilityId);
+      var driver = a.driverId ? facilityNameOf(st, a.driverId) : "unassigned";
+      var cold = a.coldStorageHoursRemaining != null ? Math.round(a.coldStorageHoursRemaining) + " hrs" : "\u2014";
+      return '' +
+        '<div class="action' + (done ? " done" : "") + '" data-action-id="' + a.id + '">' +
+          '<div class="ah"><svg class="bolt" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--' + cls + ')" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span class="lab">' + (ACT_SEV_LABEL[a.severity] || "Action") + " \u00b7 " + a.item + '</span></div>' +
+          '<div class="body">' +
+            '<div class="rec">' +
+              '<div class="rl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg> Lifeline Recommendation</div>' +
+              '<div class="move">' + a.title + " \u2014 move " + a.quantity + " " + a.item + '</div>' +
+              '<div class="flow"><span class="node2">' + fromName + '</span><span class="arr">\u2192</span><span class="node2">' + toName + '</span></div>' +
+              '<div class="specs"><div class="sp"><span class="spk">Driver</span><span class="spv">' + driver + '</span></div><div class="sp"><span class="spk">Distance</span><span class="spv">' + a.distanceMiles + ' mi</span></div><div class="sp"><span class="spk">ETA</span><span class="spv">' + a.etaMinutes + ' min</span></div><div class="sp"><span class="spk">Cold storage</span><span class="spv">' + cold + '</span></div></div>' +
+            '</div>' +
+            '<div class="whybox"><div class="wh">Why this action?</div><ul class="why"><li>' + (a.reason || "") + '</li><li>Estimated impact: ' + a.estimatedImpact + '</li></ul><div class="trustrow"><span class="vf">\u2713 Verified resources</span><span class="vf">\u2713 Human approval required</span></div></div>' +
+            '<div class="impactline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> Estimated impact: ' + a.estimatedImpact + '</div>' +
+            (done ? "" : '<div class="abtns"><button class="abtn approve" data-op="approve">Approve Action</button><button class="abtn alt" data-op="alternative">Find Alternative</button><button class="abtn decline" data-op="decline">Decline</button></div>') +
+          '</div>' +
+          '<div class="approved-state"><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg><div class="big2">Action ' + (a.status === "completed" ? "Completed" : "Approved & Dispatched") + '</div><div class="sm">' + a.estimatedImpact + '</div></div>' +
+        '</div>';
+    }).join("");
+  }
+
+  function renderState(st) {
+    if (!st) return;
+    API.lastState = st;
+    renderTiles(st);
+    renderQueue(st);
+    renderNetwork(st);
+    if (API.live) renderActions(st);
+  }
+
+  /* Delegated handler: Approve / Decline / Alternative on dynamic cards. */
+  (function wireActionButtons() {
+    var wrap = $(".actionwrap"); if (!wrap) return;
+    wrap.addEventListener("click", function (e) {
+      if (!API.live) return; // offline -> original mock handlers win
+      var btn = e.target.closest ? e.target.closest(".abtn[data-op]") : null;
+      if (!btn) return;
+      var card = btn.closest("[data-action-id]");
+      if (!card) return;
+      var id = card.getAttribute("data-action-id");
+      var op = btn.getAttribute("data-op");
+      $$(".abtn", card).forEach(function (b) { b.setAttribute("disabled", ""); });
+      apiFetch("/actions/" + encodeURIComponent(id) + "/" + op, { method: "POST" })
+        .then(function (st) {
+          renderState(st);
+          if (op === "approve") { burst(); chord([523, 659, 784]); toast("good", "Action approved & dispatched", "Impact updated"); }
+          else if (op === "decline") toast("warn", "Action declined", "Escalated to human coordinator");
+          else toast("", "Alternative generated", "Next-best option proposed");
+        })
+        .catch(function (err) {
+          $$(".abtn", card).forEach(function (b) { b.removeAttribute("disabled"); });
+          toast("crit", "Action failed", err.message);
+        });
+    });
+  })();
+
+  function loadState() {
+    return apiFetch("/state").then(function (st) {
+      setApiStatus(true);
+      renderState(st);
+      return st;
+    }).catch(function (err) {
+      console.warn("[lifeline] backend unreachable, keeping mock UI:", err.message);
+      setApiStatus(false);
+    });
+  }
+
+  /* On boot: try to attach to the backend. */
+  loadState();
+
+  /* Make the Simulate button call the real endpoint (in addition to the
+   * existing cosmetic shake/flash/toast flourish already bound above). */
+  (function wireSimulate() {
+    var btn = $("#simBtn"); if (!btn) return;
+    btn.addEventListener("click", function () {
+      if (!API.live) return; // backend offline → leave mock flow alone
+      apiFetch("/simulate", { method: "POST" }).then(function (st) {
+        renderState(st);
+        toast("good", "Backend simulation applied", (st.actions ? st.actions.length : 0) + " interventions generated");
+      }).catch(function (err) {
+        toast("crit", "Simulate failed", err.message);
+      });
+    });
+  })();
+  /* ================================================================ */
 })();

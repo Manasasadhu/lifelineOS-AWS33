@@ -1,4 +1,10 @@
-import {
+import * as serviceV1 from "../service";
+import * as serviceV2 from "../engine-v2/service";
+import { OfflineEvent } from "../types";
+
+/** Select the engine implementation. ENGINE_V2=true routes to Engineer 3's engine. */
+const svc = process.env.ENGINE_V2 === "true" ? serviceV2 : serviceV1;
+const {
   contract,
   getImpact,
   getState,
@@ -10,8 +16,7 @@ import {
   simulateRoadClose,
   submitRequest,
   syncOffline,
-} from "../service";
-import { OfflineEvent } from "../types";
+} = svc;
 
 export interface HttpRequest {
   method: string;

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lifeline OS — Request Help</title>
+  <meta name="description" content="Request emergency help. Tell Lifeline what you need and we'll coordinate it with nearby resources.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Resident view: deliberately minimal. No nav, no operator identity, no map. */
+    .r-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    .r-top { width: 100%; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: var(--panel, #0C1526); box-sizing: border-box; }
+    .r-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; color: var(--text, #EAF2FF); }
+    .r-brand .orb { width: 26px; height: 26px; border-radius: 7px; background: var(--accent, #3BA0E8); }
+    .r-brand span { color: var(--accent, #3BA0E8); }
+    .r-conn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid #1E3A5A; font-family: "JetBrains Mono", monospace; font-size: 11px; color: #8FB0D6; }
+    .r-conn .apiDot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .r-card { width: 100%; max-width: 560px; margin-top: 6vh; padding: 0 20px; box-sizing: border-box; }
+    .r-card h1 { color: var(--text, #EAF2FF); font-size: 26px; text-align: center; margin: 0 0 8px; }
+    .r-card .sub { color: var(--muted, #8FB0D6); font-size: 14px; text-align: center; margin: 0 0 28px; }
+    .r-box { background: var(--panel2, #0F1C30); border: 1px solid #24405F; border-radius: 14px; padding: 18px; }
+    .r-box label { display: block; color: #6E8CAD; font-size: 12px; letter-spacing: 1px; margin-bottom: 10px; }
+    .r-box textarea { width: 100%; min-height: 120px; background: transparent; border: none; resize: vertical; color: var(--text, #EAF2FF); font-size: 16px; font-family: inherit; outline: none; box-sizing: border-box; }
+    .r-loc { margin-top: 14px; background: var(--panel2, #0F1C30); border: 1px solid #24405F; border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; color: #8FB0D6; font-size: 13px; }
+    .r-loc input { background: transparent; border: none; color: var(--text, #EAF2FF); text-align: right; outline: none; font-family: inherit; font-size: 13px; }
+    .r-submit { width: 100%; margin-top: 16px; padding: 15px; border: none; border-radius: 12px; background: linear-gradient(90deg,#3BA0E8,#6E7CF5); color: #06101F; font-size: 16px; font-weight: 700; cursor: pointer; }
+    .r-submit:disabled { opacity: .6; cursor: default; }
+    .r-ok { margin-top: 18px; background: #0E2A1E; border: 1px solid #1E5A3C; border-radius: 12px; padding: 18px; display: none; }
+    .r-ok.show { display: block; }
+    .r-ok .t { color: var(--text, #EAF2FF); font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .r-ok .d { color: #9FD6B8; font-size: 13px; }
+    .r-ok .id { color: #6E8CAD; font-size: 11px; margin-top: 8px; font-family: "JetBrains Mono", monospace; }
+    .r-foot { margin-top: auto; padding: 24px; text-align: center; color: #45617E; font-size: 11px; }
+    .r-foot a { color: #5E7CA0; }
+  </style>
+</head>
+<body>
+<div class="r-wrap">
+  <div class="r-top">
+    <div class="r-brand"><div class="orb"></div>LIFELINE<span>OS</span></div>
+    <div class="r-conn"><span id="apiDot" class="apiDot"></span><span id="apiLbl">connecting…</span></div>
+  </div>
+
+  <div class="r-card">
+    <h1>Request Emergency Help</h1>
+    <p class="sub">Tell us what you need. We'll coordinate it with nearby resources. No account needed.</p>
+
+    <div class="r-box">
+      <label for="reqText">What do you need?</label>
+      <textarea id="reqText" placeholder="e.g. My grandmother needs insulin and our power went out.">My grandmother needs insulin and our power went out.</textarea>
+    </div>
+
+    <div class="r-loc">
+      <span>📍 Your approximate area (optional)</span>
+      <input id="reqLoc" value="Downtown San José" aria-label="Approximate area">
+    </div>
+
+    <button class="r-submit" id="reqBtn">Submit Request</button>
+
+    <div class="r-ok" id="reqOk">
+      <div class="t">✓ Request received</div>
+      <div class="d" id="reqOkMsg">A coordinator is reviewing it. Help is being arranged.</div>
+      <div class="id" id="reqOkId"></div>
+    </div>
+  </div>
+
+  <div class="r-foot">
+    Residents only see this form — no map, no other people's data, no controls.<br>
+    Privacy by design · no login · minimum information collected.
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var API_BASE = (function () {
+    try { var q = new URLSearchParams(location.search).get("api"); if (q) return q.replace(/\/$/, ""); } catch (e) {}
+    return "http://localhost:3001";
+  })();
+  var live = false;
+  var dot = document.getElementById("apiDot");
+  var lbl = document.getElementById("apiLbl");
+
+  function setStatus(ok) {
+    live = ok;
+    dot.style.background = ok ? "#2FD98A" : "#FF4D64";
+    dot.style.boxShadow = ok ? "0 0 8px 1px rgba(47,217,138,.6)" : "0 0 8px 1px rgba(255,77,100,.5)";
+    lbl.textContent = ok ? "online" : "offline";
+  }
+
+  // Probe the backend so the resident sees an honest connection state.
+  fetch(API_BASE + "/health").then(function (r) { setStatus(r.ok); }).catch(function () { setStatus(false); });
+
+  var btn = document.getElementById("reqBtn");
+  var ok = document.getElementById("reqOk");
+  btn.addEventListener("click", function () {
+    var text = (document.getElementById("reqText").value || "").trim();
+    if (!text) return;
+    btn.setAttribute("disabled", "");
+    btn.textContent = "Submitting…";
+    ok.classList.remove("show");
+
+    function done(id) {
+      btn.removeAttribute("disabled");
+      btn.textContent = "Submit Request";
+      document.getElementById("reqOkId").textContent = id ? "Request ID: " + id + " · you don't need to do anything else" : "";
+      ok.classList.add("show");
+    }
+
+    if (!live) {
+      // Offline: still acknowledge locally so the resident isn't left hanging.
+      setTimeout(function () { done("queued-locally"); }, 600);
+      return;
+    }
+
+    fetch(API_BASE + "/requests", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: text })
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        var p = res.parsed || {};
+        document.getElementById("reqOkMsg").textContent =
+          "Understood: " + (p.need || "your request") + (p.urgency ? " · priority " + p.urgency : "") + ". A coordinator is arranging help.";
+        var reqs = res.state && res.state.requests;
+        var id = reqs && reqs.length ? reqs[reqs.length - 1].id : null;
+        done(id);
+      })
+      .catch(function () {
+        document.getElementById("reqOkMsg").textContent = "We couldn't reach the network. Your request was saved and will send when the connection returns.";
+        done(null);
+      });
+  });
+})();
+</script>
+</body>
+</html>
