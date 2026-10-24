@@ -106,11 +106,15 @@
   function fmt(s) { if (s < 0) s = 0; var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60, p = function (n) { return (n < 10 ? "0" : "") + n; }; return p(h) + ":" + p(m) + ":" + p(x); }
   function colorFor(s) { return s < 3600 ? "var(--crit)" : s < 10800 ? "var(--risk)" : s < 21600 ? "var(--warn)" : "var(--good)"; }
   var R = 24, C = 2 * Math.PI * R;
-  var gauges = $$(".gauge").map(function (el) {
-    var secs = parseInt(el.getAttribute("data-secs"), 10), total = parseInt(el.getAttribute("data-total"), 10) || secs;
-    el.innerHTML = '<svg viewBox="0 0 58 58"><circle class="gtrack" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5"/><circle class="gprog" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5" stroke-dasharray="' + C + '" stroke-dashoffset="0"/></svg><div class="gt"></div>';
-    return { prog: el.querySelector(".gprog"), txt: el.querySelector(".gt"), secs: secs, total: total };
-  });
+  var gauges = [];
+  function buildGauges() {
+    gauges = $$(".gauge").map(function (el) {
+      var secs = parseInt(el.getAttribute("data-secs"), 10), total = parseInt(el.getAttribute("data-total"), 10) || secs;
+      if (!el.querySelector("svg")) el.innerHTML = '<svg viewBox="0 0 58 58"><circle class="gtrack" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5"/><circle class="gprog" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5" stroke-dasharray="' + C + '" stroke-dashoffset="0"/></svg><div class="gt"></div>';
+      return { prog: el.querySelector(".gprog"), txt: el.querySelector(".gt"), secs: secs, total: total };
+    });
+  }
+  buildGauges();
   var BR = 74, BC = 2 * Math.PI * BR;
   $$(".bp").forEach(function (b) { b.setAttribute("stroke-dasharray", BC); });
   var simpleClocks = $$(".clock").filter(function (c) { return !c.closest(".gauge"); }).map(function (el) {
@@ -172,11 +176,23 @@
   }
 
   /* ---------- Simulate ---------- */
+  var CRISIS_QUEUE = '<div class="qitem sev crit"><div class="qt"><div class="n">Insulin · Pharmacy A</div><div class="d">Refrigeration failing — 25 doses</div></div><div class="gauge" data-secs="2598" data-total="3600"></div></div>'
+    + '<div class="qitem sev risk"><div class="qt"><div class="n">Food Bank B</div><div class="d">243 meals at spoilage risk</div></div><div class="gauge" data-secs="5040" data-total="7200"></div></div>'
+    + '<div class="qitem sev risk"><div class="qt"><div class="n">Water Depot G</div><div class="d">1,200 residents on supply</div></div><div class="gauge" data-secs="8100" data-total="12000"></div></div>'
+    + '<div class="qitem sev warn"><div class="qt"><div class="n">Shelter C Food Supply</div><div class="d">Serving 40 residents</div></div><div class="gauge" data-secs="18000" data-total="21600"></div></div>';
+  var crisisOn = false;
+  function enterCrisis() {
+    if (crisisOn) return; crisisOn = true;
+    $("#app").classList.add("crisis");
+    $$("#app [data-crisis]").forEach(function (el) { el.dataset.done = ""; el.setAttribute("data-count", el.getAttribute("data-crisis")); countTo(el); });
+    var q = $("#queue"); if (q) { q.innerHTML = CRISIS_QUEUE; buildGauges(); }
+  }
   var simRun = false;
   $("#simBtn").addEventListener("click", function () {
     if (simRun) return; simRun = true; var btn = this; btn.setAttribute("disabled", "");
     $("#app").classList.add("shake"); setTimeout(function () { $("#app").classList.remove("shake"); }, 520);
     $("#flash").classList.remove("on"); void $("#flash").offsetWidth; $("#flash").classList.add("on");
+    enterCrisis();
     if (window.__quake) window.__quake();
     beep(140, .5, "sawtooth", .06); setTimeout(function () { beep(110, .4, "sawtooth", .05); }, 160);
     var steps = [
@@ -184,17 +200,18 @@
       ["warn", "EVENT 02 · Spoilage Risk", "Food Bank B: 243 meals at risk → Shelter C transfer proposed"],
       ["", "EVENT 03 · Citizen Request", "“Grandmother needs insulin, power out” — Bedrock parsed as Critical"],
       ["warn", "EVENT 04 · Road Closed", "7th St blocked — Volunteer #04 rerouted, +2 min ETA"],
+      ["warn", "EVENT 05 · Water Main Break", "Depot G: 1,200 residents affected — redistribution proposed"],
       ["good", "AUTOPILOT", "Highest-impact intervention queued — awaiting operator approval"]
     ];
     steps.forEach(function (s, i) { setTimeout(function () { toast(s[0], s[1], s[2]);
-      if (i === 0) { var c = $("#tCrit"); c.textContent = parseInt(c.textContent, 10) + 1; }
-      if (i === steps.length - 1) { btn.removeAttribute("disabled"); simRun = false; $("#navBadge").classList.remove("hide"); } }, 1100 * (i + 1)); });
+      if (i === steps.length - 1) { btn.removeAttribute("disabled"); simRun = false; $("#navBadge").classList.remove("hide"); } }, 950 * (i + 1)); });
   });
 
   /* ---------- Approve ---------- */
   function inc(id, n) { var el = $(id); if (!el) return; el.dataset.done = ""; el.setAttribute("data-count", parseInt(el.getAttribute("data-count"), 10) + n); var sc = el.closest(".impact"); if (sc && sc.classList.contains("show")) countTo(el); }
   $("#approveBtn").addEventListener("click", function () {
     $("#action").classList.add("done");
+    $("#app").classList.add("pharma-ok");
     inc("#mDoses", 25); inc("#mPeople", 1); inc("#mReq", 1);
     addLog("Insulin transfer · Pharmacy A → Community Center D", "25 doses protected · Volunteer #04");
     burst(); chord([523, 659, 784]); toast("good", "Action Dispatched", "Volunteer #04 en route · 25 doses protected");

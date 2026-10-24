@@ -214,7 +214,7 @@ img { max-width: 100%; }
   .qitem:hover { background: var(--surface-2); }
   .qitem .qt { min-width: 0; flex: 1; } .qitem .qt .n { font-weight: 600; font-size: 13px; } .qitem .qt .d { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .gauge { position: relative; width: 58px; height: 58px; flex: none; }
-  .gauge svg { width: 58px; height: 58px; transform: rotate(-90deg); } .gauge .gtrack { stroke: var(--ring-track); }
+  .gauge svg { width: 58px; height: 58px; transform: rotate(-90deg); overflow: visible; } .gauge .gtrack { stroke: var(--ring-track); }
   .gauge .gprog { stroke: var(--c, var(--good)); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .4s; filter: drop-shadow(0 0 4px var(--c, var(--good))); }
   .gauge .gt { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 11px; color: var(--c, var(--good)); }
   .sev.crit { --c: var(--crit); } .sev.risk { --c: var(--risk); } .sev.warn { --c: var(--warn); } .sev.good { --c: var(--good); }
@@ -254,8 +254,8 @@ img { max-width: 100%; }
   .action .ah .lab { font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: 12px; color: var(--crit); }
   .action .body { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
   .failblock { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .bigring { position: relative; width: 168px; height: 168px; } .bigring svg { width: 168px; height: 168px; transform: rotate(-90deg); }
-  .bigring .bt2 { stroke: var(--ring-track); } .bigring .bp { stroke: var(--crit); stroke-linecap: round; filter: drop-shadow(0 0 6px var(--crit)); transition: stroke-dashoffset 1s linear; }
+  .bigring { position: relative; width: 168px; height: 168px; } .bigring svg { width: 168px; height: 168px; transform: rotate(-90deg); overflow: visible; display: block; }
+  .bigring .bt2 { stroke: var(--ring-track); } .bigring .bp { stroke: var(--crit); stroke-linecap: round; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--crit) 55%, transparent)); transition: stroke-dashoffset 1s linear; }
   .bigring .ctr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .bigring .ctr .big { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--crit); letter-spacing: .02em; }
   .bigring .ctr .cap { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin-top: 3px; }
@@ -385,6 +385,25 @@ img { max-width: 100%; }
   .brand .orb, #entry .elogo .orb, .rbrand .orb, #boot .borb { background: url("assets/logo-icon.png") center/cover no-repeat; }
   .operator .av { background: url("assets/avatar.png") center 30%/cover no-repeat; color: transparent; font-size: 0; }
   .rbanner { width: 100%; height: 170px; object-fit: cover; object-position: center 58%; border-radius: var(--radius); display: block; }
+  /* calm / crisis */
+  .alert-crisis { display: none !important; }
+  #app.crisis .alert-calm { display: none !important; }
+  #app.crisis .alert-crisis { display: flex !important; }
+  .alert-calm { background: linear-gradient(90deg, var(--good-bg), transparent 80%); border-color: var(--good); }
+  .alert-calm .bolt, .alert-calm .live { color: var(--good); }
+  .alert-calm .blink { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .alert-calm::after { display: none; }
+  #app:not(.crisis) .tile.crit { --tc: var(--good); border-color: var(--border); background: var(--glass); }
+  #app:not(.crisis) .tile.crit .v { color: var(--fg); }
+  .qcalm { padding: 26px 16px; text-align: center; color: var(--good); font-size: 13px; font-weight: 600; }
+  #app:not(.crisis) .map .pharma .bg, #app:not(.crisis) .map .food .bg, #app:not(.crisis) .map .shelter .bg { fill: var(--good-bg) !important; stroke: var(--good) !important; }
+  #app:not(.crisis) .map .pharma .code, #app:not(.crisis) .map .food .code, #app:not(.crisis) .map .shelter .code { fill: var(--good) !important; }
+  #app:not(.crisis) .map .crisis-only { display: none; }
+  #app.pharma-ok .map .pharma .bg { fill: rgba(47,217,138,.14) !important; stroke: var(--good) !important; }
+  #app.pharma-ok .map .pharma .code { fill: var(--good) !important; }
+  #app.pharma-ok .map .pharma-pulse { display: none !important; }
+  .map .pharma-secured { display: none; }
+  #app.pharma-ok .map .pharma-secured { display: inline; }
 
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .05s !important; } #boot .bfill { width: 100% } }
 
