@@ -3,6 +3,7 @@ dist/
 cdk.out/
 .cdk.staging/
 *.js.map
+*.log
 .env
 .env.local
 .DS_Store
