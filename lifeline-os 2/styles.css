@@ -404,6 +404,17 @@ img { max-width: 100%; }
   #app.pharma-ok .map .pharma-pulse { display: none !important; }
   .map .pharma-secured { display: none; }
   #app.pharma-ok .map .pharma-secured { display: inline; }
+  /* radar ops display */
+  .map .street { stroke: var(--radar-ring); stroke-width: 1; fill: none; opacity: .5; }
+  .map .mesh { stroke: var(--accent); stroke-width: 1; opacity: .15; stroke-dasharray: 3 7; animation: flow 1.4s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -10; } }
+  .map .blip { fill: none; stroke: var(--accent); stroke-width: 1.4; animation: ping 3.2s ease-out infinite; }
+  @keyframes ping { 0% { r: 19px; opacity: .5; } 100% { r: 35px; opacity: 0; } }
+  .map .hud { fill: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; opacity: .72; }
+  .map .hud-dim { fill: var(--faint); font-family: var(--mono); font-size: 8.5px; letter-spacing: .1em; opacity: .62; }
+  .map .scandot { animation: blink 1.4s steps(2) infinite; }
+  .map .rrange { fill: var(--faint); font-family: var(--mono); font-size: 8px; opacity: .55; }
+  @media (prefers-reduced-motion: reduce) { .map .blip { animation: none; opacity: .3; } }
 
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .05s !important; } #boot .bfill { width: 100% } }
 
