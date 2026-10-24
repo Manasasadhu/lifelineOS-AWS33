@@ -1,0 +1,14 @@
+{
+  "name": "lifeline-os",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "infra"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @lifeline/backend",
+    "build:api": "npm run build -w @lifeline/backend",
+    "cdk": "npm run cdk -w @lifeline/infra",
+    "deploy": "npm run deploy -w @lifeline/infra"
+  }
+}
