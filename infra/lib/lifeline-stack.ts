@@ -71,8 +71,8 @@ export class LifelineStack extends cdk.Stack {
         SYNC_QUEUE_URL: syncQueue.queueUrl,
         ARTIFACT_BUCKET: artifacts.bucketName,
         ENGINE_V2: "true",
-        USE_BEDROCK: "false",
-        BEDROCK_MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0",
+        USE_BEDROCK: "true",
+        BEDROCK_MODEL_ID: "amazon.nova-lite-v1:0",
       },
     });
 

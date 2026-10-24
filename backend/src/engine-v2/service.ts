@@ -7,6 +7,7 @@
 import type { ParsedRequest as EngineParsed } from "@lifeline/engine";
 import { ParsedRequest, WorldState } from "../types";
 import { toWorldState } from "./adapter";
+import { parseWithBedrock } from "./bedrock";
 import { getEngineV2Store } from "./store";
 
 /** Map Engineer 3's ParsedRequest to the public ParsedRequest shape the frontend reads. */
@@ -49,7 +50,9 @@ export async function setConnection(mode: "cloud" | "edge"): Promise<WorldState>
 export async function submitRequest(
   text: string,
 ): Promise<{ parsed: ParsedRequest; state: WorldState }> {
-  const { state, parsed } = getEngineV2Store().submitRequest(text);
+  // Try Bedrock (Amazon Nova) first; null → store uses the local keyword parser.
+  const bedrock = await parseWithBedrock(text);
+  const { state, parsed } = getEngineV2Store().submitRequest(text, bedrock ?? undefined);
   return { parsed: mapParsed(parsed), state: toWorldState(state) };
 }
 
