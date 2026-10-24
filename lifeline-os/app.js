@@ -208,20 +208,76 @@
   }
 
   /* ---------- Simulate ---------- */
+  /* Toast scripts mirror the engine timelines in src/engine/scenario.ts and scenarios.ts. */
+  var SCENARIOS = {
+    earthquake: {
+      title: "EARTHQUAKE RESPONSE ACTIVE", ctx: "7.0 Earthquake Response",
+      sub: "M7.0 earthquake — downtown San José",
+      steps: [
+        ["crit", "EVENT 01 · Power Outage", "Pharmacy A refrigeration now failing — survival clock engaged"],
+        ["warn", "EVENT 02 · Spoilage Risk", "Food Bank B cooler failed: 243 meals at risk · Shelter C +25 evacuees"],
+        ["", "EVENT 03 · Citizen Request", "“Grandmother needs insulin, no electricity” — parsed as Critical"],
+        ["warn", "EVENT 04 · Road Closed", "Debris on E San Carlos St — affected trips rerouted"]
+      ]
+    },
+    wildfire: {
+      title: "WILDFIRE RESPONSE ACTIVE", ctx: "Wildfire · AQI 285 · Evacuations",
+      sub: "Wildfire in the east foothills — AQI 285, evacuations under way",
+      steps: [
+        ["crit", "EVENT 01 · Safety Power Shutoff", "Pharmacy A cut from the grid — insulin cold storage failing"],
+        ["warn", "EVENT 02 · Evacuees Arriving", "Shelter C +60 evacuees — meals and water running low"],
+        ["", "EVENT 03 · Citizen Request", "“Evacuated with two kids, no food” — parsed as Critical"],
+        ["warn", "EVENT 04 · Road Closed", "Fire engines staging on W San Carlos St — resupply rerouted"]
+      ]
+    },
+    flood: {
+      title: "FLOOD RESPONSE ACTIVE", ctx: "Guadalupe River Flooding",
+      sub: "Guadalupe River flooding — 4.2 in of rain in 6 hours",
+      steps: [
+        ["crit", "EVENT 01 · River Overflow", "W San Carlos St crossing closed · Grocery E loses power and 350 bottles of water"],
+        ["warn", "EVENT 02 · Cooler Failure", "Floodwater shorts Food Bank B's compressor — 243 meals at risk"],
+        ["", "EVENT 03 · Citizen Request", "“Two kids and elderly mother need drinking water” — parsed as Critical"],
+        ["warn", "EVENT 04 · Road Closed", "Flooded underpass on Almaden Blvd — deliveries rerouted"]
+      ]
+    },
+    heatwave: {
+      title: "HEATWAVE RESPONSE ACTIVE", ctx: "Extreme Heat · 112 °F",
+      sub: "Extreme heat — 112 °F with rolling blackouts",
+      steps: [
+        ["crit", "EVENT 01 · Rolling Blackout", "Pharmacy A loses power — insulin cold storage failing"],
+        ["warn", "EVENT 02 · Compressor Overheat", "Food Bank B cooler down: 243 meals at risk · Shelter C opens as cooling centre"],
+        ["", "EVENT 03 · Citizen Request", "“Elderly neighbor, no AC, dizzy, needs water” — parsed as Critical"],
+        ["warn", "EVENT 04 · Road Closed", "Buckled pavement on E San Fernando St — trips rerouted"]
+      ]
+    },
+    grid_failure: {
+      title: "GRID BLACKOUT RESPONSE ACTIVE", ctx: "Regional Grid Failure",
+      sub: "Regional grid failure — substation fire, 92% of customers without power",
+      steps: [
+        ["crit", "EVENT 01 · Grid Down", "All 5 sites lose power — only generator sites keep cooling"],
+        ["warn", "EVENT 02 · Shelter Surge", "Shelter C +40 residents leaving dark homes — meals running low"],
+        ["", "EVENT 03 · Citizen Request", "“Elderly dad freezing, needs blankets” — parsed and matched"],
+        ["warn", "EVENT 04 · Road Closed", "Traffic signals out at E Santa Clara St & 7th St — trips rerouted"]
+      ]
+    }
+  };
+  function selectedScenario() { var s = $("#simScenario"); return s && SCENARIOS[s.value] ? s.value : "earthquake"; }
+  function showIncident(title, sub, ctx) {
+    if ($("#incidentTitle")) $("#incidentTitle").textContent = title;
+    if (sub && $("#incidentSub")) $("#incidentSub").textContent = sub;
+    if (ctx && $("#scrCtx")) $("#scrCtx").textContent = "San José · Simulation Day 01 · " + ctx;
+  }
+
   var simRun = false;
   $("#simBtn").addEventListener("click", function () {
     if (simRun) return; simRun = true; var btn = this; btn.setAttribute("disabled", "");
+    var sc = SCENARIOS[selectedScenario()];
+    showIncident(sc.title, sc.sub, sc.ctx);
     $("#app").classList.add("shake"); setTimeout(function () { $("#app").classList.remove("shake"); }, 520);
     $("#flash").classList.remove("on"); void $("#flash").offsetWidth; $("#flash").classList.add("on");
     if (window.__quake) window.__quake();
     beep(140, .5, "sawtooth", .06); setTimeout(function () { beep(110, .4, "sawtooth", .05); }, 160);
-    var steps = [
-      ["crit", "EVENT 01 · Power Outage", "Pharmacy A refrigeration now failing — survival clock engaged"],
-      ["warn", "EVENT 02 · Spoilage Risk", "Food Bank B: 243 meals at risk → Shelter C transfer proposed"],
-      ["", "EVENT 03 · Citizen Request", "“Grandmother needs insulin, power out” — Bedrock parsed as Critical"],
-      ["warn", "EVENT 04 · Road Closed", "7th St blocked — Volunteer #04 rerouted, +2 min ETA"],
-      ["good", "AUTOPILOT", "Highest-impact intervention queued — awaiting operator approval"]
-    ];
+    var steps = sc.steps.concat([["good", "AUTOPILOT", "Highest-impact intervention queued — awaiting operator approval"]]);
     steps.forEach(function (s, i) { setTimeout(function () { toast(s[0], s[1], s[2]);
       if (i === 0) { var c = $("#tCrit"); c.textContent = parseInt(c.textContent, 10) + 1; }
       if (i === steps.length - 1) { btn.removeAttribute("disabled"); simRun = false; $("#navBadge").classList.remove("hide"); } }, 1100 * (i + 1)); });
@@ -232,6 +288,7 @@
   $("#approveBtn").addEventListener("click", function () {
     $("#action").classList.add("done");
     inc("#mDoses", 25); inc("#mPeople", 1); inc("#mReq", 1);
+    addLog("Insulin transfer · Pharmacy A → Community Center D", "25 doses protected · Volunteer #04");
     burst(); chord([523, 659, 784]); toast("good", "Action Dispatched", "Volunteer #04 en route · 25 doses protected");
     setTimeout(function () { var f = $("#action2"); if (f) { f.hidden = false; try { f.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {} } $("#navBadge").classList.remove("hide"); toast("warn", "New Intervention Queued", "Food Bank B: 243 meals at risk — review recommended"); }, 1400);
   });
@@ -239,6 +296,7 @@
   if (a2) a2.addEventListener("click", function () {
     $("#action2").classList.add("done"); $("#navBadge").classList.add("hide");
     inc("#mPeople", 40); inc("#mReq", 1);
+    addLog("Food redistribution · Food Bank B → Shelter C", "243 meals rescued · 40 residents fed · Volunteer #07");
     burst(); chord([523, 659, 784]); toast("good", "Meals Redistributed", "243 meals en route to Shelter C · 40 residents fed");
   });
   $$(".abtn.alt").forEach(function (b) { b.addEventListener("click", function () { toast("", "Searching alternatives", "Scanning nearby nodes…"); }); });
@@ -250,7 +308,7 @@
   var PRI_COLOR = { critical: "var(--crit)", high: "var(--risk)", medium: "var(--warn)", low: "var(--good)" };
 
   /* Render the interpretation panel from a backend `parsed` object. */
-  function renderParsed(parsed, matchedAction) {
+  function renderParsed(parsed, matchedAction, outcome) {
     var interp = $("#interp");
     var need = NEED_LABEL[(parsed.need || "unknown").toLowerCase()] || parsed.need;
     var pri = PRI_LABEL[parsed.urgency] || parsed.urgency;
@@ -262,9 +320,10 @@
     $("#iPpl").textContent = parsed.people != null ? parsed.people : 1;
     $("#iPow").textContent = pow; $("#iPow").style.color = powC;
     if ($("#iLoc")) $("#iLoc").textContent = parsed.location || "—";
-    var matchMsg = matchedAction
-      ? "Matched → " + matchedAction.toFacilityId + " · " + matchedAction.item + " ×" + matchedAction.quantity
-      : "Request added to emergency network";
+    var matchMsg = outcome && outcome.message ? outcome.message
+      : matchedAction
+        ? "Matched → " + matchedAction.toFacilityId + " · " + matchedAction.item + " ×" + matchedAction.quantity
+        : "Request added to emergency network";
     $("#iOk").textContent = matchMsg;
     interp.classList.remove("load");
     // Honestly reflect whether Bedrock or the rules parser produced this.
@@ -282,10 +341,27 @@
     if (/insulin|medic|diabet|prescription|refriger/.test(lower)) { out.need = "insulin"; out.urgency = "critical"; }
     else if (/food|meal|hungry|eat/.test(lower)) { out.need = "meals"; out.urgency = "high"; }
     else if (/water|thirst/.test(lower)) { out.need = "water"; out.urgency = "high"; }
-    if (/no power|power out|power went|no electric|outage|blackout/.test(lower)) out.powerAvailable = false;
+    if (/power (?:is |went |'s )?(?:out|off|down|gone)|no power|no electric|outage|blackout/.test(lower)) out.powerAvailable = false;
     else if (/power|electric/.test(lower)) out.powerAvailable = true;
     if (m) out.people = parseInt(m[1], 10);
     return out;
+  }
+
+  /* What happened to a submitted request: matched to an action, waiting for a volunteer, or not understood. */
+  function requestOutcome(st, requestId) {
+    if (!requestId) {
+      return { kind: "unknown", message: "Couldn't tell what's needed — mention insulin, medication, water, food or blankets" };
+    }
+    var action = (st.actions || []).find(function (a) {
+      return a.toFacilityId === requestId && (a.status === "pending" || a.status === "approved");
+    });
+    if (action) {
+      var driver = action.driverId ? facilityNameOf(st, action.driverId) : "a volunteer";
+      return { kind: "matched", action: action, message: "Matched → " + driver + " brings " + action.quantity + " " + action.item + " from " + facilityNameOf(st, action.fromFacilityId) + " · ETA " + action.etaMinutes + " min" };
+    }
+    var req = (st.requests || []).find(function (r) { return r.id === requestId; });
+    var why = (req && req.waitingReason) || "waiting for a free volunteer";
+    return { kind: "waiting", message: /^Declined/.test(why) ? why : "Queued — " + why };
   }
 
   $("#reqBtn").addEventListener("click", function () {
@@ -303,11 +379,19 @@
 
     apiFetch("/requests", { method: "POST", body: JSON.stringify({ text: txt }) })
       .then(function (res) {
-        var matched = (res.state.actions || []).slice(-1)[0];
-        // Only treat the newest action as "matched" if it references this request.
-        var isMatch = matched && /citizen request/i.test(matched.reason || "");
-        renderParsed(res.parsed, isMatch ? matched : null);
-        renderState(res.state); // refresh tiles / queue / network from new state
+        var st = res.state;
+        if (res.requestId || res.parsed.need === "unknown") {
+          var outcome = requestOutcome(st, res.requestId);
+          renderParsed(res.parsed, outcome.action, outcome);
+          if (outcome.kind === "waiting") toast("warn", "Request queued", outcome.message);
+          else if (outcome.kind === "matched") toast("good", "Volunteer matched", outcome.message);
+        } else {
+          var matched = (st.actions || []).slice(-1)[0];
+          // Only treat the newest action as "matched" if it references this request.
+          var isMatch = matched && /citizen request/i.test(matched.reason || "");
+          renderParsed(res.parsed, isMatch ? matched : null);
+        }
+        renderState(st); // refresh tiles / queue / network from new state
       })
       .catch(function (err) {
         interp.classList.remove("load");
@@ -401,7 +485,9 @@
 
   function facilityNameOf(st, id) {
     var f = (st.facilities || []).find(function (x) { return x.id === id; });
-    return f ? f.name : id;
+    if (f) return f.name;
+    var r = (st.requests || []).find(function (x) { return x.id === id; });
+    return r ? "Resident · " + r.location : id;
   }
 
   /* Render the Actions screen from real backend actions, binding real IDs. */
@@ -452,6 +538,7 @@
   function renderState(st) {
     if (!st) return;
     API.lastState = st;
+    if (st.incident && st.incident.active) showIncident(st.incident.label, st.incident.description);
     renderTiles(st);
     renderQueue(st);
     renderNetwork(st);
@@ -470,10 +557,16 @@
       var id = card.getAttribute("data-action-id");
       var op = btn.getAttribute("data-op");
       $$(".abtn", card).forEach(function (b) { b.setAttribute("disabled", ""); });
+      var before = API.lastState;
+      var act = before && (before.actions || []).find(function (a) { return a.id === id; });
       apiFetch("/actions/" + encodeURIComponent(id) + "/" + op, { method: "POST" })
         .then(function (st) {
           renderState(st);
-          if (op === "approve") { burst(); chord([523, 659, 784]); toast("good", "Action approved & dispatched", "Impact updated"); }
+          if (op === "approve") {
+            burst(); chord([523, 659, 784]); toast("good", "Action approved & dispatched", "Impact updated");
+            if (act) addLog(act.title + " · " + facilityNameOf(before, act.fromFacilityId) + " → " + facilityNameOf(before, act.toFacilityId),
+              act.estimatedImpact + (act.driverId ? " · " + facilityNameOf(before, act.driverId) : ""));
+          }
           else if (op === "decline") toast("warn", "Action declined", "Escalated to human coordinator");
           else toast("", "Alternative generated", "Next-best option proposed");
         })
@@ -504,7 +597,7 @@
     var btn = $("#simBtn"); if (!btn) return;
     btn.addEventListener("click", function () {
       if (!API.live) return; // backend offline → leave mock flow alone
-      apiFetch("/simulate", { method: "POST" }).then(function (st) {
+      apiFetch("/simulate", { method: "POST", body: JSON.stringify({ scenario: selectedScenario() }) }).then(function (st) {
         renderState(st);
         toast("good", "Backend simulation applied", (st.actions ? st.actions.length : 0) + " interventions generated");
       }).catch(function (err) {
@@ -513,4 +606,82 @@
     });
   })();
   /* ================================================================ */
+  /* ---------- Approval log + prioritization ---------- */
+  function addLog(title, meta) {
+    var body = $("#logBody"); if (!body) return;
+    var empty = body.querySelector(".logEmpty"); if (empty) empty.remove();
+    var t = $("#missionClock") ? $("#missionClock").textContent : "";
+    var row = document.createElement("div"); row.className = "logrow";
+    row.innerHTML = '<span class="lchk">✓</span><div class="ldet"><div class="lt"></div><div class="lm"></div></div><div class="ltime"></div>';
+    row.querySelector(".lt").textContent = title; row.querySelector(".lm").textContent = meta; row.querySelector(".ltime").textContent = t;
+    body.insertBefore(row, body.firstChild);
+  }
+  var prioData = [
+    { rank: 1, cls: "r1", text: "“Grandmother needs insulin, power out” — Downtown", chips: ["Medical · Urgency 5", "1 person", "Fails in 42m", "1.2 mi"], score: 94, rat: "Medical-critical with a 42-min failure window — handled first." },
+    { rank: 2, cls: "r2", text: "“Shelter has 40 people, food until tonight” — East Side", chips: ["Food · Urgency 3", "40 people", "Fails in 5h", "2.0 mi"], score: 71, rat: "Larger group, but a 5-hour window — queued second." }
+  ];
+  var prioBtn = $("#prioBtn");
+  if (prioBtn) prioBtn.addEventListener("click", function () {
+    var q = $("#prioq"); if (!q) return; q.innerHTML = "";
+    prioData.forEach(function (d, i) {
+      setTimeout(function () {
+        var r = document.createElement("div"); r.className = "prow " + d.cls;
+        r.innerHTML = '<div class="rank">#' + d.rank + '</div><div class="pbody"><div class="ptext"></div><div class="pchips">' + d.chips.map(function () { return "<span></span>"; }).join("") + '</div><div class="prat"></div></div><div class="pscore">' + d.score + '<small>score</small></div>';
+        r.querySelector(".ptext").textContent = d.text; r.querySelector(".prat").textContent = d.rat;
+        var cs = r.querySelectorAll(".pchips span"); d.chips.forEach(function (c, k) { cs[k].textContent = c; });
+        q.appendChild(r);
+      }, i * 450);
+    });
+    toast("", "2 requests received simultaneously", "Priority engine ranking by urgency × people × time-to-failure");
+    beep(520, .08, "sine", .04);
+  });
+
+  /* ---------- Role select + resident view ---------- */
+  function showRole(role) {
+    $("#entry").hidden = true;
+    $("#app").hidden = role !== "coordinator";
+    $("#resident").hidden = role !== "resident";
+    if (role === "coordinator") { var a = $("#nav button.active"); if (a) setTimeout(function () { moveGlider(a); }, 30); }
+  }
+  function toEntry() { $("#entry").hidden = false; $("#app").hidden = true; $("#resident").hidden = true; }
+  $$("#entry .ecard").forEach(function (c) { c.addEventListener("click", function () { showRole(c.getAttribute("data-role")); beep(560, .09, "sine", .045); }); });
+  var sw = $("#switchBtn"); if (sw) sw.addEventListener("click", toEntry);
+  $$("[data-switch]").forEach(function (b) { b.addEventListener("click", toEntry); });
+
+  var rSubmit = $("#rSubmit");
+  function showResidentStatus(need, urg, urgC, ppl, pow, powC, matchText) {
+    $("#rNeed").textContent = need; $("#rUrg").textContent = urg; $("#rUrg").className = urgC;
+    $("#rPpl").textContent = ppl; $("#rPow").textContent = pow; $("#rPow").className = powC;
+    $("#rMatch").textContent = matchText;
+    $("#rStatus").hidden = false; beep(600, .1, "sine", .05);
+    try { $("#rStatus").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {}
+  }
+  function submitResidentLive(text) {
+    apiFetch("/requests", { method: "POST", body: JSON.stringify({ text: text }) }).then(function (res) {
+      var p = res.parsed, outcome = requestOutcome(res.state, res.requestId);
+      showResidentStatus(
+        NEED_LABEL[(p.need || "unknown").toLowerCase()] || p.need,
+        PRI_LABEL[p.urgency] || p.urgency,
+        p.urgency === "critical" || p.urgency === "high" ? "crit" : "",
+        String(p.people != null ? p.people : 1),
+        p.powerAvailable === false ? "Unavailable" : p.powerAvailable === true ? "Available" : "Unknown",
+        p.powerAvailable === false ? "crit" : "",
+        outcome.message);
+      renderState(res.state);
+    }).catch(function (err) { toast("crit", "Request failed", err.message); });
+  }
+
+  if (rSubmit) rSubmit.addEventListener("click", function () {
+    if (API.live) { submitResidentLive($("#rText").value || ""); return; }
+    var txt = ($("#rText").value || "").toLowerCase();
+    var need = "General assistance", urg = "Moderate", urgC = "", pow = "Unknown", powC = "", ppl = "1", dest = "the nearest open resource", dist = "";
+    var m = txt.match(/(\d+)\s*(people|persons|residents|meals|ppl)/);
+    if (/insulin|medic|diabet|prescription|refriger/.test(txt)) { need = "Insulin / Medication"; urg = "Critical"; urgC = "crit"; dest = "Community Center D"; dist = "1.2 mi"; }
+    else if (/food|meal|hungry|eat/.test(txt)) { need = "Food"; urg = "High"; urgC = "crit"; dest = "Grocery Store E"; dist = "0.9 mi"; }
+    else if (/water|thirst/.test(txt)) { need = "Water"; urg = "High"; urgC = "crit"; dest = "Shelter C"; dist = "2.0 mi"; }
+    else if (/shelter|cold|roof|house/.test(txt)) { need = "Shelter"; urg = "High"; urgC = "crit"; dest = "Shelter C"; dist = "2.0 mi"; }
+    if (/power (?:is |went |'s )?(?:out|off|down|gone)|no power|no electric|outage|blackout/.test(txt)) { pow = "Unavailable"; powC = "crit"; } else if (/power|electric/.test(txt)) { pow = "Available"; powC = ""; }
+    if (m) ppl = m[1];
+    showResidentStatus(need, urg, urgC, ppl, pow, powC, "Matched to " + dest + (dist ? " · " + dist : ""));
+  });
 })();

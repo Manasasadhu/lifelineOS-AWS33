@@ -11,10 +11,12 @@ import {
   advanceScenario,
   approveAction,
   buildRequest,
+  buildScenario,
   createInitialState,
   declineAction,
   dispatchEvent,
   findProposal,
+  isDisasterType,
   requestAlternative,
   simulateEarthquake,
   tick,
@@ -41,9 +43,14 @@ export class EngineV2Store {
     return this.state;
   }
 
-  /** Apply the scripted earthquake and advance a few minutes so clocks are live. */
-  simulate(): EngineState {
-    this.timeline = simulateEarthquake();
+  /** Start a scripted disaster (earthquake by default) and advance a few minutes so clocks are live. */
+  simulate(scenario: string = "earthquake"): EngineState {
+    if (!isDisasterType(scenario)) {
+      const err = new Error(`Unknown scenario "${scenario}"`) as Error & { statusCode: number };
+      err.statusCode = 400;
+      throw err;
+    }
+    this.timeline = buildScenario(scenario);
     this.state = advanceScenario(createInitialState(), this.timeline, SIMULATE_ADVANCE_MINUTES);
     return this.state;
   }

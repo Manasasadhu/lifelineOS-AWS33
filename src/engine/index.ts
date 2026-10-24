@@ -54,6 +54,8 @@ export {
   proposalForNeed,
   findProposal,
   markEventsSynced,
+  NO_FREE_VOLUNTEER,
+  DECLINED_BY_COORDINATOR,
 } from './engine';
 export {
   createEventLog,
@@ -98,9 +100,26 @@ export {
   applyDueEvents,
   advanceScenario,
   GRANDMOTHER_REQUEST_TEXT,
+  scriptedRequest,
   type ScheduledEvent,
   type EarthquakeOptions,
+  type ScenarioOptions,
+  type ScriptedRequestInput,
 } from './scenario';
+export {
+  DISASTER_SCENARIOS,
+  buildScenario,
+  isDisasterType,
+  simulateWildfire,
+  simulateFlood,
+  simulateHeatwave,
+  simulateGridFailure,
+  WILDFIRE_REQUEST_TEXT,
+  FLOOD_REQUEST_TEXT,
+  HEATWAVE_REQUEST_TEXT,
+  GRID_FAILURE_REQUEST_TEXT,
+  type ScenarioDefinition,
+} from './scenarios';
 export {
   parseRequestLocally,
   resolveParsedRequest,

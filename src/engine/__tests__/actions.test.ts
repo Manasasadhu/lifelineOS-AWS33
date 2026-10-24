@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   approveAction,
+  DECLINED_BY_COORDINATOR,
   declineAction,
   dispatchEvent,
   proposalForNeed,
@@ -8,6 +9,7 @@ import {
   tick,
 } from '../engine';
 import { advanceScenario, simulateEarthquake } from '../scenario';
+import { buildScenario } from '../scenarios';
 import { createInitialState } from '../seed';
 import type { Action, EngineState } from '../types';
 
@@ -73,13 +75,32 @@ describe('approve → in_progress → completed', () => {
 });
 
 describe('decline / find alternative', () => {
-  it('declining promotes the next-best option and never re-proposes the declined combo', () => {
+  it('declining dismisses the need: nothing more is proposed for it, even after time passes', () => {
     let s = atT0();
     const first = proposalForNeed(s, INSULIN_NEED)!;
-    s = declineAction(s, first.id, 'Volunteer unreachable');
+    s = declineAction(s, first.id, 'Coordinator handling by phone');
     expect(action(s, first.id).status).toBe('declined');
-    expect(action(s, first.id).declineReason).toBe('Volunteer unreachable');
+    expect(action(s, first.id).declineReason).toBe('Coordinator handling by phone');
+    expect(action(s, first.id).needDismissed).toBe(true);
 
+    expect(proposalForNeed(s, INSULIN_NEED)).toBeUndefined();
+    s = tick(s, 3);
+    expect(proposalForNeed(s, INSULIN_NEED)).toBeUndefined();
+  });
+
+  it('declining a resident request marks it as declined instead of re-proposing it', () => {
+    let s = advanceScenario(createInitialState(), buildScenario('wildfire'), 7);
+    const req = s.actions.find((a) => a.status === 'proposed' && a.toRequestId === 'req-0001')!;
+    s = declineAction(s, req.id);
+    expect(s.actions.some((a) => a.status === 'proposed' && a.toRequestId === 'req-0001')).toBe(false);
+    expect(s.requests.find((r) => r.id === 'req-0001')!.waitingReason).toBe(DECLINED_BY_COORDINATOR);
+  });
+
+  it('find alternative keeps the need and never re-proposes the ruled-out combo', () => {
+    let s = atT0();
+    const first = proposalForNeed(s, INSULIN_NEED)!;
+    s = requestAlternative(s, first.id);
+    expect(action(s, first.id).needDismissed).toBeUndefined();
     const next = proposalForNeed(s, INSULIN_NEED)!;
     expect(next.volunteerId).not.toBe(first.volunteerId);
     s = tick(s, 3);

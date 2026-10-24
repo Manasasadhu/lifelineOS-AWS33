@@ -140,6 +140,7 @@ function mapAction(state: V2State, a: V2Action): Action {
 }
 
 function titleFor(a: V2Action): string {
+  if (a.toRequestId) return `Resident request: ${a.itemKind}`;
   if (a.itemKind === "insulin" || a.itemKind === "medication") return "Medication refrigeration failure";
   if (a.itemKind === "meals") return "Meals at risk of spoilage";
   return `${a.itemKind} transfer`;
@@ -157,6 +158,14 @@ function mapActionStatus(s: V2Action["status"]): Action["status"] {
       return s as Action["status"];
   }
 }
+
+const INCIDENT_NAMES: Record<NonNullable<V2State["disaster"]>["type"], string> = {
+  earthquake: "EARTHQUAKE",
+  wildfire: "WILDFIRE",
+  flood: "FLOOD",
+  heatwave: "HEATWAVE",
+  grid_failure: "GRID BLACKOUT",
+};
 
 function mapIncident(state: V2State): Incident {
   const d = state.disaster;
@@ -177,7 +186,8 @@ function mapIncident(state: V2State): Incident {
     type: d.type,
     location: "San José",
     startedAt: new Date(Date.now() - (state.simTime - d.startedAt) * 60_000).toISOString(),
-    label: "EARTHQUAKE RESPONSE ACTIVE",
+    label: `${INCIDENT_NAMES[d.type]} RESPONSE ACTIVE`,
+    description: d.label,
     elapsedLabel: "00:00:00",
     roadClosed: state.roadClosures.length > 0,
     roadName: state.roadClosures[0]?.label ?? null,
@@ -239,6 +249,7 @@ export function toWorldState(state: V2State): WorldState {
       source: "rules" as const,
       createdAt: new Date().toISOString(),
       status: r.status === "resolved" ? "resolved" : r.status === "open" ? "open" : "matched",
+      ...(r.waitingReason ? { waitingReason: r.waitingReason } : {}),
     })),
     alerts: mapAlerts(state),
     impact: mapImpact(state),

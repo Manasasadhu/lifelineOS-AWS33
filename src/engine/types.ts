@@ -21,6 +21,7 @@ export type ClockSeverity = 'critical' | 'at_risk' | 'warning' | 'stable';
 export type ClockKind = 'cold_storage' | 'power' | 'supply';
 export type VehicleType = 'car' | 'van' | 'bike';
 export type ConnectionMode = 'online' | 'edge';
+export type DisasterType = 'earthquake' | 'wildfire' | 'flood' | 'heatwave' | 'grid_failure';
 export type EventOrigin = 'cloud' | 'edge';
 
 // ---------------------------------------------------------------------------
@@ -115,6 +116,8 @@ export interface NeedRequest {
   /** Sim minutes. */
   createdAt: number;
   status: RequestStatus;
+  /** Derived: why an open request has no proposal yet (e.g. every volunteer is booked). */
+  waitingReason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +240,8 @@ export interface Action {
   /** For type 'reroute': the in-progress action this one replaces. */
   replacesActionId?: string;
   declineReason?: string;
+  /** Set when the coordinator declined the need itself, not just this volunteer/route. */
+  needDismissed?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +258,13 @@ interface EventBase {
 
 export type EngineEvent = EventBase &
   (
-    | { type: 'DISASTER_STARTED'; disasterType: 'earthquake'; magnitude: number; label: string }
+    | {
+        type: 'DISASTER_STARTED';
+        disasterType: DisasterType;
+        /** Intensity on the disaster's own scale: Mw, AQI, inches of rain, °F, or % of customers without power. */
+        magnitude: number;
+        label: string;
+      }
     | { type: 'POWER_LOST'; facilityId: string }
     | { type: 'REFRIGERATION_FAILED'; facilityId: string }
     | {
@@ -269,7 +280,13 @@ export type EngineEvent = EventBase &
     | { type: 'ROAD_CLOSED'; closure: RoadClosure }
     | { type: 'ROAD_REOPENED'; closureId: string }
     | { type: 'ACTION_APPROVED'; actionId: string }
-    | { type: 'ACTION_DECLINED'; actionId: string; reason?: string }
+    | {
+        type: 'ACTION_DECLINED';
+        actionId: string;
+        reason?: string;
+        /** true: stop proposing anything for this need. false/omitted: only rule out this option. */
+        dismissNeed?: boolean;
+      }
     | { type: 'ACTION_COMPLETED'; actionId: string }
     | { type: 'CONNECTION_LOST' }
     | { type: 'CONNECTION_RESTORED' }
@@ -287,7 +304,7 @@ export type EngineEventInput = DistributiveOmit<EngineEvent, keyof EventBase>;
 // ---------------------------------------------------------------------------
 
 export interface DisasterInfo {
-  type: 'earthquake';
+  type: DisasterType;
   magnitude: number;
   label: string;
   startedAt: number;

@@ -64,7 +64,10 @@ export async function handleRequest(req: HttpRequest): Promise<HttpResponse> {
     if (method === "GET" && path === "/state") return ok(publicSummary(await getState()));
     if (method === "GET" && path === "/impact") return ok({ ...(await getImpact()), label: "SIMULATION RESULTS" });
 
-    if (method === "POST" && path === "/simulate") return ok(publicSummary(await simulateDisaster()));
+    if (method === "POST" && path === "/simulate") {
+      const body = (req.body ?? {}) as { scenario?: string };
+      return ok(publicSummary(await simulateDisaster(body.scenario)));
+    }
     if (method === "POST" && path === "/simulate/reset") return ok(publicSummary(await resetSimulation()));
     if (method === "POST" && path === "/simulate/road-close") return ok(publicSummary(await simulateRoadClose()));
 
@@ -77,8 +80,9 @@ export async function handleRequest(req: HttpRequest): Promise<HttpResponse> {
     if (method === "POST" && path === "/requests") {
       const body = (req.body ?? {}) as { text?: string };
       if (!body.text?.trim()) return error(400, "text is required");
-      const { parsed, state } = await submitRequest(body.text.trim());
-      return ok({ parsed, state: publicSummary(state) });
+      const result = await submitRequest(body.text.trim());
+      const requestId = "requestId" in result ? result.requestId : undefined;
+      return ok({ parsed: result.parsed, requestId, state: publicSummary(result.state) });
     }
 
     const actionMatch = path.match(/^\/actions\/([^/]+)\/(approve|decline|alternative)$/);

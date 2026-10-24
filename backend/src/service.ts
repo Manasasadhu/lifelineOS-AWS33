@@ -20,7 +20,8 @@ export async function getImpact(): Promise<WorldState["impact"]> {
   return state.impact;
 }
 
-export async function simulateDisaster(): Promise<WorldState> {
+/** The v1 engine only models the earthquake; other scenarios need ENGINE_V2=true. */
+export async function simulateDisaster(_scenario?: string): Promise<WorldState> {
   const store = getStore();
   let state = refreshDerived(applyEarthquake(await store.load()));
   state = bump(state);

@@ -118,6 +118,7 @@ interface Ledger {
   coldIncoming: Map<string, number>; // facilityId → cold units arriving
   bookedVolunteers: Set<string>;
   declinedIds: Set<string>;
+  dismissedNeeds: Set<string>;
 }
 
 const key = (facilityId: string, kind: ItemKind) => `${facilityId}:${kind}`;
@@ -134,9 +135,11 @@ function ledgerFromActions(state: EngineState): Ledger {
     coldIncoming: new Map(),
     bookedVolunteers: new Set(),
     declinedIds: new Set(),
+    dismissedNeeds: new Set(),
   };
   for (const a of state.actions) {
     if (a.status === 'declined') ledger.declinedIds.add(a.id);
+    if (a.status === 'declined' && a.needDismissed) ledger.dismissedNeeds.add(a.needId);
     if (!isActiveAction(a)) continue;
     add(ledger.outgoing, key(a.fromFacilityId, a.itemKind), a.quantity);
     if (a.toFacilityId) {
@@ -478,7 +481,7 @@ function toAction(c: Candidate, state: EngineState): Action {
 /** Propose actions for every need, best first, without double-booking. */
 export function generateActions(state: EngineState): MatchResult {
   const ledger = ledgerFromActions(state);
-  let remaining = collectNeedsWith(state, ledger);
+  let remaining = collectNeedsWith(state, ledger).filter((n) => !ledger.dismissedNeeds.has(n.id));
   const actions: Action[] = [];
   const lastRejected = new Map<string, RejectedOption[]>();
 

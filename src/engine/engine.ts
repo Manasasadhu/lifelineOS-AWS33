@@ -25,6 +25,7 @@ import type {
   Facility,
   InventoryItem,
   ItemKind,
+  NeedRequest,
 } from './types';
 
 const EPSILON = 1e-9;
@@ -45,6 +46,10 @@ const DEFAULT_UNITS: Record<ItemKind, string> = {
   blankets: 'blankets',
 };
 
+export const NO_FREE_VOLUNTEER =
+  'All volunteers are assigned to higher-priority actions; next in line when one is free';
+export const DECLINED_BY_COORDINATOR = 'Declined by coordinator; escalated for manual follow-up';
+
 /**
  * Recompute everything that is derived: clocks, facility status, proposed
  * actions, pending sync count. Approved / in-progress / completed / declined
@@ -63,13 +68,32 @@ export function deriveState(state: EngineState): EngineState {
 
   const kept = state.actions.filter((a) => a.status !== 'proposed');
   const previous = new Map(state.actions.map((a) => [a.id, a]));
-  const proposals = generateActions({ ...withClocks, actions: kept }).actions.map((a) => {
+  const match = generateActions({ ...withClocks, actions: kept });
+  const proposals = match.actions.map((a) => {
     const prior = previous.get(a.id);
     return prior?.status === 'proposed' ? { ...a, createdAt: prior.createdAt } : a;
   });
 
+  const waiting = new Map<string, string>();
+  for (const a of kept) {
+    if (a.status === 'declined' && a.needDismissed && a.toRequestId) waiting.set(a.toRequestId, DECLINED_BY_COORDINATOR);
+  }
+  for (const { need, rejected } of match.unmet) {
+    if (need.kind !== 'request' || !need.destRequestId) continue;
+    waiting.set(need.destRequestId, rejected[0]?.reason ?? NO_FREE_VOLUNTEER);
+  }
+  const requests = state.requests.map((r) => {
+    const reason = r.status === 'open' ? waiting.get(r.id) : undefined;
+    if (reason === r.waitingReason) return r;
+    const next: NeedRequest = { ...r };
+    if (reason) next.waitingReason = reason;
+    else delete next.waitingReason;
+    return next;
+  });
+
   return {
     ...withClocks,
+    requests,
     actions: [...kept, ...proposals],
     pendingSyncCount: state.eventLog.reduce((n, e) => (e.synced ? n : n + 1), 0),
   };
@@ -337,6 +361,7 @@ function reduceEvent(state: EngineState, event: EngineEvent): EngineState {
         ...rest,
         status: 'declined',
         ...(event.reason ? { declineReason: event.reason } : {}),
+        ...(event.dismissNeed ? { needDismissed: true } : {}),
       };
       return { ...state, actions: [...state.actions.filter((a) => a.status !== 'proposed'), declined] };
     }
@@ -388,14 +413,16 @@ export function approveAction(state: EngineState, actionId: string): EngineState
 }
 
 /** Decline a proposal. That exact (need, source, destination, volunteer) combo is never re-proposed. */
+/** "Decline": the coordinator rejects the need, so nothing more is proposed for it. */
 export function declineAction(state: EngineState, actionId: string, reason?: string): EngineState {
   if (!findProposal(state, actionId)) return state;
-  return dispatchEvent(state, { type: 'ACTION_DECLINED', actionId, ...(reason ? { reason } : {}) });
+  return dispatchEvent(state, { type: 'ACTION_DECLINED', actionId, dismissNeed: true, ...(reason ? { reason } : {}) });
 }
 
-/** "Find Alternative": decline the current proposal so the next-best option for the same need is proposed. */
+/** "Find Alternative": rule out only this option so the next-best one for the same need is proposed. */
 export function requestAlternative(state: EngineState, actionId: string): EngineState {
-  return declineAction(state, actionId, 'Alternative requested');
+  if (!findProposal(state, actionId)) return state;
+  return dispatchEvent(state, { type: 'ACTION_DECLINED', actionId, reason: 'Alternative requested' });
 }
 
 /** The current proposal for a need, if any (e.g. after requestAlternative). */

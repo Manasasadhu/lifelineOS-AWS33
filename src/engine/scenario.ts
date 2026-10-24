@@ -15,13 +15,22 @@ export interface ScheduledEvent {
   event: EngineEventInput;
 }
 
-export interface EarthquakeOptions {
-  /** Bedrock's ParsedRequest for the T+4 resident text. Omitted or invalid → local keyword parser. */
+export interface ScenarioOptions {
+  /** Bedrock's ParsedRequest for the scenario's resident text. Omitted or invalid → local keyword parser. */
   bedrockParse?: unknown;
 }
 
+export type EarthquakeOptions = ScenarioOptions;
+
 export function simulateEarthquake(options: EarthquakeOptions = {}): ScheduledEvent[] {
-  const residentRequest = grandmotherRequest(options.bedrockParse);
+  const residentRequest = scriptedRequest({
+    text: GRANDMOTHER_REQUEST_TEXT,
+    bedrockParse: options.bedrockParse,
+    lat: 37.3425,
+    lng: -121.8795,
+    locationLabel: 'near N 6th St & E St John St',
+    createdAt: 4,
+  });
   return [
     // T+0 — quake hits, grid drops across downtown.
     {
@@ -68,15 +77,25 @@ export function simulateEarthquake(options: EarthquakeOptions = {}): ScheduledEv
 
 export const GRANDMOTHER_REQUEST_TEXT = 'My grandmother needs insulin and we have no electricity.';
 
-function grandmotherRequest(bedrockParse: unknown): NeedRequest {
+export interface ScriptedRequestInput {
+  text: string;
+  bedrockParse?: unknown;
+  lat: number;
+  lng: number;
+  locationLabel: string;
+  createdAt: number;
+}
+
+/** The resident request a scenario injects. Each scenario has exactly one, so the id is fixed. */
+export function scriptedRequest(input: ScriptedRequestInput): NeedRequest {
   const { request } = buildRequest({
     id: 'req-0001',
-    text: GRANDMOTHER_REQUEST_TEXT,
-    bedrock: bedrockParse,
-    lat: 37.3425,
-    lng: -121.8795,
-    locationLabel: 'near N 6th St & E St John St',
-    createdAt: 4,
+    text: input.text,
+    bedrock: input.bedrockParse,
+    lat: input.lat,
+    lng: input.lng,
+    locationLabel: input.locationLabel,
+    createdAt: input.createdAt,
   });
   if (!request) throw new Error('Scenario request could not be parsed');
   return request;

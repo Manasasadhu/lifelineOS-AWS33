@@ -64,6 +64,8 @@ export interface EmergencyRequest {
   source: "bedrock" | "rules";
   createdAt: string;
   status: "open" | "matched" | "resolved";
+  /** Why an open request has no proposed action yet. */
+  waitingReason?: string;
 }
 
 export interface Incident {
@@ -72,6 +74,8 @@ export interface Incident {
   location: string;
   startedAt: string | null;
   label: string;
+  /** One-line description of the disaster, e.g. "Guadalupe River flooding — 4.2 in of rain in 6 hours". */
+  description?: string;
   elapsedLabel: string;
   roadClosed: boolean;
   roadName: string | null;

@@ -3,11 +3,14 @@
  *
  *   npm run actions            # at T+0
  *   npm run actions -- 20      # after 20 sim minutes
+ *   npm run actions -- 7 flood # another scenario: earthquake | wildfire | flood | heatwave | grid_failure
  */
-import { advanceScenario, createInitialState, simulateEarthquake, type Action } from '../src/engine';
+import { advanceScenario, buildScenario, createInitialState, isDisasterType, type Action } from '../src/engine';
 
 const atMinute = Number(process.argv[2] ?? 0);
-const state = advanceScenario(createInitialState(), simulateEarthquake(), atMinute);
+const scenarioId = process.argv[3] ?? 'earthquake';
+if (!isDisasterType(scenarioId)) throw new Error(`Unknown scenario "${scenarioId}"`);
+const state = advanceScenario(createInitialState(), buildScenario(scenarioId), atMinute);
 
 const fmt = (n: number, d = 2) => n.toFixed(d);
 
@@ -15,7 +18,13 @@ function line(a: Action, indent = ''): string {
   return `${indent}${a.volunteerId} ${a.fromFacilityId} → ${a.toFacilityId ?? a.toRequestId}  ${fmt(a.distanceMiles, 1)} mi, ETA ${Math.ceil(a.etaMinutes)} min, score ${fmt(a.priorityScore)}${a.rerouted ? ' [REROUTED]' : ''}`;
 }
 
-console.log(`SIMULATION — proposed actions at T+${state.simTime}\n`);
+console.log(`SIMULATION — ${state.disaster?.label} — proposed actions at T+${state.simTime}\n`);
+for (const c of state.clocks.filter((x) => x.severity !== 'stable')) {
+  console.log(`  ⏱ ${c.severity.padEnd(8)} ${fmt(c.minutesRemaining, 0).padStart(5)} min  ${c.label}`);
+}
+for (const r of state.requests) console.log(`  ✉ ${r.urgency} ${r.needKind} ×${r.peopleAffected}: "${r.rawText}"`);
+for (const c of state.roadClosures) console.log(`  ⛔ ${c.label}`);
+console.log('');
 for (const a of state.actions.filter((x) => x.status === 'proposed')) {
   const b = a.scoreBreakdown;
   console.log(`▶ ${a.type.toUpperCase()} ${a.quantity} ${a.itemKind}  (${a.id})`);

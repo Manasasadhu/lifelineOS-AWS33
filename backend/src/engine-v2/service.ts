@@ -30,12 +30,12 @@ export async function getImpact(): Promise<WorldState["impact"]> {
   return toWorldState(getEngineV2Store().get()).impact;
 }
 
-export async function simulateDisaster(): Promise<WorldState> {
-  return toWorldState(getEngineV2Store().simulate());
+export async function simulateDisaster(scenario?: string): Promise<WorldState> {
+  return toWorldState(getEngineV2Store().simulate(scenario));
 }
 
 export async function simulateRoadClose(): Promise<WorldState> {
-  // The scripted scenario closes a road at T+6; advancing past it triggers the reroute.
+  // Every scripted scenario closes a road by T+6; advancing past it triggers the reroute.
   return toWorldState(getEngineV2Store().advance(6));
 }
 
@@ -49,11 +49,11 @@ export async function setConnection(mode: "cloud" | "edge"): Promise<WorldState>
 
 export async function submitRequest(
   text: string,
-): Promise<{ parsed: ParsedRequest; state: WorldState }> {
+): Promise<{ parsed: ParsedRequest; state: WorldState; requestId?: string }> {
   // Try Bedrock (Amazon Nova) first; null → store uses the local keyword parser.
   const bedrock = await parseWithBedrock(text);
-  const { state, parsed } = getEngineV2Store().submitRequest(text, bedrock ?? undefined);
-  return { parsed: mapParsed(parsed), state: toWorldState(state) };
+  const { state, parsed, request } = getEngineV2Store().submitRequest(text, bedrock ?? undefined);
+  return { parsed: mapParsed(parsed), state: toWorldState(state), requestId: request?.id };
 }
 
 export async function mutateAction(
@@ -108,7 +108,7 @@ export function contract() {
       "GET /state",
       "GET /impact",
       "GET /contract",
-      "POST /simulate",
+      "POST /simulate  { scenario?: earthquake|wildfire|flood|heatwave|grid_failure }",
       "POST /simulate/reset",
       "POST /simulate/road-close",
       "POST /requests  { text }",
