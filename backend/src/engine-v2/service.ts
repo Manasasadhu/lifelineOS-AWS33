@@ -9,7 +9,7 @@ import { ParsedRequest, WorldState } from "../types";
 import type { EngineState } from "@lifeline/engine";
 import { toWorldState } from "./adapter";
 import { parseWithBedrock } from "./bedrock";
-import { getEngineV2Store } from "./store";
+import { getStore, type EngineV2Store } from "./store";
 
 /** Map Engineer 3's ParsedRequest to the public ParsedRequest shape the frontend reads. */
 function mapParsed(p: EngineParsed): ParsedRequest {
@@ -23,31 +23,38 @@ function mapParsed(p: EngineParsed): ParsedRequest {
   };
 }
 
-const world = (state: EngineState): WorldState => toWorldState(state, getEngineV2Store().getHistory(), getEngineV2Store().getStamps());
+const world = (store: EngineV2Store, state: EngineState): WorldState =>
+  toWorldState(state, store.getHistory(), store.getStamps());
 
 export async function getState(): Promise<WorldState> {
-  return world(getEngineV2Store().get());
+  const store = await getStore();
+  return world(store, store.get());
 }
 
 export async function getImpact(): Promise<WorldState["impact"]> {
-  return world(getEngineV2Store().get()).impact;
+  const store = await getStore();
+  return world(store, store.get()).impact;
 }
 
 export async function simulateDisaster(scenario?: string): Promise<WorldState> {
-  return world(getEngineV2Store().simulate(scenario));
+  const store = await getStore();
+  return world(store, store.simulate(scenario));
 }
 
 export async function simulateRoadClose(): Promise<WorldState> {
   // Every scripted scenario closes a road by T+6; advancing past it triggers the reroute.
-  return world(getEngineV2Store().advance(6));
+  const store = await getStore();
+  return world(store, store.advance(6));
 }
 
 export async function resetSimulation(): Promise<WorldState> {
-  return world(getEngineV2Store().reset());
+  const store = await getStore();
+  return world(store, store.reset());
 }
 
 export async function setConnection(mode: "cloud" | "edge"): Promise<WorldState> {
-  return world(getEngineV2Store().setConnection(mode));
+  const store = await getStore();
+  return world(store, store.setConnection(mode));
 }
 
 export async function submitRequest(
@@ -55,18 +62,19 @@ export async function submitRequest(
 ): Promise<{ parsed: ParsedRequest; state: WorldState; requestId?: string }> {
   // Try Bedrock (Amazon Nova) first; null → store uses the local keyword parser.
   const bedrock = await parseWithBedrock(text);
-  const { state, parsed, request } = getEngineV2Store().submitRequest(text, bedrock ?? undefined);
-  return { parsed: mapParsed(parsed), state: world(state), requestId: request?.id };
+  const store = await getStore();
+  const { state, parsed, request } = store.submitRequest(text, bedrock ?? undefined);
+  return { parsed: mapParsed(parsed), state: world(store, state), requestId: request?.id };
 }
 
 export async function mutateAction(
   id: string,
   op: "approve" | "decline" | "alternative",
 ): Promise<WorldState> {
-  const store = getEngineV2Store();
+  const store = await getStore();
   const state =
     op === "approve" ? store.approve(id) : op === "decline" ? store.decline(id) : store.alternative(id);
-  return world(state);
+  return world(store, state);
 }
 
 export async function syncOffline(
@@ -74,10 +82,10 @@ export async function syncOffline(
 ): Promise<{ applied: number; state: WorldState }> {
   // In the v2 engine, edge events are already in the event log; restoring the
   // connection marks them synced. We simply report how many were pending.
-  const store = getEngineV2Store();
+  const store = await getStore();
   const before = store.get().pendingSyncCount;
   const state = store.setConnection("cloud");
-  return { applied: before, state: world(state) };
+  return { applied: before, state: world(store, state) };
 }
 
 export function publicSummary(state: WorldState) {

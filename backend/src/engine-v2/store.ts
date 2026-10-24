@@ -31,8 +31,16 @@ import {
   type ScheduledEvent,
 } from "@lifeline/engine";
 import { simSpeed } from "./clock";
-import { EngineDb, type HistoryEntry } from "./db";
+import { EngineDb, type HistoryEntry, type Snapshot, type VolunteerRow } from "./db";
+import { DynamoEngineDb } from "./dynamo";
 import { describeTrip, volunteerRows } from "./volunteers";
+
+/** Persistence contract shared by the SQLite (local) and DynamoDB (cloud) stores. */
+export interface PersistenceDb {
+  load(): Snapshot | null;
+  save(scenario: string, state: EngineState, history: HistoryEntry[], volunteers: VolunteerRow[], stamps: Record<string, string>): void;
+  clear(): void;
+}
 
 /** How far into the scenario a fresh /simulate advances (sim minutes). */
 const SIMULATE_ADVANCE_MINUTES = 5;
@@ -53,7 +61,7 @@ export class EngineV2Store {
   private lastWallMs = Date.now();
   readonly speed = simSpeed();
 
-  constructor(private readonly db?: EngineDb) {
+  constructor(private readonly db?: PersistenceDb) {
     const saved = db?.load();
     if (saved && isDisasterType(saved.scenario)) {
       this.scenario = saved.scenario;
@@ -218,11 +226,41 @@ export class EngineV2Store {
 }
 
 let singleton: EngineV2Store | undefined;
+let initPromise: Promise<EngineV2Store> | undefined;
 
+/**
+ * Synchronous accessor. Safe to call anywhere, but with DynamoDB persistence the
+ * first call may not yet have the saved snapshot loaded — prefer getStore() in
+ * request handlers so the cloud snapshot is read first.
+ */
 export function getEngineV2Store(): EngineV2Store {
   if (!singleton) {
+    const table = process.env.TABLE_NAME;
     const file = process.env.LIFELINE_DB;
-    singleton = new EngineV2Store(file && file !== "off" ? new EngineDb(file) : undefined);
+    if (table) {
+      singleton = new EngineV2Store(new DynamoEngineDb(table));
+    } else {
+      singleton = new EngineV2Store(file && file !== "off" ? new EngineDb(file) : undefined);
+    }
   }
   return singleton;
+}
+
+/**
+ * Async accessor used by request handlers. When DynamoDB persistence is active,
+ * it reads the saved snapshot once and rebuilds the store from it before first use.
+ */
+export async function getStore(): Promise<EngineV2Store> {
+  const table = process.env.TABLE_NAME;
+  if (!table) return getEngineV2Store(); // SQLite / in-memory need no async load
+
+  if (!initPromise) {
+    initPromise = (async () => {
+      const db = new DynamoEngineDb(table);
+      await db.loadAsync(); // populate the sync cache from DynamoDB
+      singleton = new EngineV2Store(db);
+      return singleton;
+    })();
+  }
+  return initPromise;
 }
