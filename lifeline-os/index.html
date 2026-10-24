@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="assets/logo-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
 <div id="aurora"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
@@ -333,7 +333,7 @@
     <button class="rbtn" id="rSubmit">Get Help Now</button>
     <div class="rstatus" id="rStatus" hidden>
       <div class="ranalysis">
-        <div class="rah"><span class="spark-ico">✦</span> Amazon Bedrock understood your request</div>
+        <div class="rah"><span class="spark-ico">✦</span> <span id="rSrc">Amazon Bedrock</span> understood your request</div>
         <div class="rkv"><span>Need</span><b id="rNeed">Insulin / Medication</b></div>
         <div class="rkv"><span>Urgency</span><b id="rUrg" class="crit">Critical</b></div>
         <div class="rkv"><span>People affected</span><b id="rPpl">1</b></div>
@@ -342,15 +342,15 @@
       <div class="rsteps">
         <div class="rstep done"><i></i><span>Request received</span></div>
         <div class="rstep done"><i></i><span id="rMatch">Matched to Community Center D · 1.2 mi</span></div>
-        <div class="rstep active"><i></i><span>Volunteer #04 dispatched · ETA 8 min</span></div>
+        <div class="rstep active" id="rDispatchStep"><i></i><span id="rDispatch">Volunteer #04 dispatched · ETA 8 min</span></div>
       </div>
-      <div class="rhelp">✓ Help is on the way. Keep your phone nearby.</div>
+      <div class="rhelp" id="rHelp">✓ Help is on the way. Keep your phone nearby.</div>
     </div>
     <div class="roffline">Works even with weak signal — your request is saved and sent the moment a connection is available.</div>
   </div></div>
 </div>
 
 <div class="toasts" id="toasts"></div>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

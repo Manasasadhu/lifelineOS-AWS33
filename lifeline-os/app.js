@@ -743,10 +743,17 @@
   });
 
   var rSubmit = $("#rSubmit");
-  function showResidentStatus(need, urg, urgC, ppl, pow, powC, matchText) {
+  /* next (live only): { source, dispatch, help } — dispatch null hides the volunteer step. */
+  function showResidentStatus(need, urg, urgC, ppl, pow, powC, matchText, next) {
     $("#rNeed").textContent = need; $("#rUrg").textContent = urg; $("#rUrg").className = urgC;
     $("#rPpl").textContent = ppl; $("#rPow").textContent = pow; $("#rPow").className = powC;
     $("#rMatch").textContent = matchText;
+    if (next) {
+      $("#rSrc").textContent = next.source;
+      $("#rDispatchStep").hidden = !next.dispatch;
+      if (next.dispatch) $("#rDispatch").textContent = next.dispatch;
+      $("#rHelp").textContent = next.help;
+    }
     $("#rStatus").hidden = false; beep(600, .1, "sine", .05);
     try { $("#rStatus").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {}
   }
@@ -760,7 +767,18 @@
         String(p.people != null ? p.people : 1),
         p.powerAvailable === false ? "Unavailable" : p.powerAvailable === true ? "Available" : "Unknown",
         p.powerAvailable === false ? "crit" : "",
-        outcome.message);
+        outcome.message,
+        {
+          source: p.source === "bedrock" ? "Amazon Bedrock" : "Lifeline",
+          dispatch: outcome.kind === "matched"
+            ? (outcome.action.driverId ? facilityNameOf(res.state, outcome.action.driverId) : "A volunteer") + " assigned · waiting for coordinator approval"
+            : null,
+          help: outcome.kind === "matched"
+            ? "✓ A volunteer is lined up. Keep your phone nearby."
+            : outcome.kind === "waiting"
+              ? "Your request is in the coordinator's queue. They can see it and will follow up."
+              : "Please describe what you need and try again."
+        });
       renderState(res.state);
     }).catch(function (err) { toast("crit", "Request failed", err.message); });
   }

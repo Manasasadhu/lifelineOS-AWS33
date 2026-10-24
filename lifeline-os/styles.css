@@ -455,3 +455,4 @@ img { max-width: 100%; }
 .apiDot{width:8px;height:8px;border-radius:50%;display:inline-block;box-shadow:0 0 0 0 transparent;transition:background .3s,box-shadow .3s}
 .apiDot.on{background:#2FD98A;box-shadow:0 0 8px 1px rgba(47,217,138,.6)}
 .apiDot.off{background:#FF4D64;box-shadow:0 0 8px 1px rgba(255,77,100,.5)}
+  .rstep[hidden] { display: none; }

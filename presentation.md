@@ -4,10 +4,11 @@ About 8–10 minutes.
 
 ## Before the demo (5 min)
 
-1. Start the backend. 5× speed lets trips finish during the demo:
+1. Start the backend. 5× speed lets trips finish during the demo (an approved trip completes in about 4 minutes):
    ```bash
    cd ~/Desktop/lifeline && SIM_SPEED=5 ENGINE_V2=true npm run dev:api
    ```
+   > ⚠️ 5× also makes the survival clocks run 5× faster. Pharmacy A's insulin and cold medication fail about **8 minutes after Simulate**. If they aren't approved by then, the stock is lost and those cards silently disappear. Get to the Actions tab and approve both Pharmacy A cards within the first ~5 minutes.
 2. Start the frontend:
    ```bash
    cd ~/Desktop/lifeline && npx --yes serve lifeline-os -l 5173
@@ -23,7 +24,7 @@ About 8–10 minutes.
 ### 2. Overview: start the disaster (1.5 min)
 - Pick **Earthquake** in the Disaster dropdown (or Wildfire or Flood) and click **Simulate Disaster Event**.
 - The screen shakes and a series of status popups play, followed by a "Backend simulation applied: N interventions" popup.
-- Point to the **Priority Queue**: these are survival clocks. For example, the Pharmacy A fridge is failing, so the insulin there has about 40 minutes left.
+- Point to the **Priority Queue**: these are survival clocks. For example, the Pharmacy A fridge is failing, so the insulin there only has a few minutes left.
 - Talking point: *"Lifeline doesn't wait for someone to call. It predicts which resources will fail and when."*
 
 ### 3. Network tab (1 min)
@@ -35,7 +36,8 @@ About 8–10 minutes.
 - Each card is a recommendation: what to move, from where to where, which driver, the ETA, and **why**, with the date and time at the top right.
 - Talking point: *"The AI proposes and a human approves. Nothing is dispatched without a coordinator."*
 - Click **Approve** on the top insulin card. You'll see a celebration, the card leaves the queue, and an **Approved** row appears in the **Action History** table on the right.
-- Click **Decline** on a low-priority card. It leaves the queue and is logged as **Declined**.
+- Also **Approve** the second Pharmacy A card (cold medication), so no stock is lost during the demo.
+- Click **Decline** on the bottom card (the lowest-priority one, usually "Action · Meals" to Shelter C). It leaves the queue and is logged as **Declined**.
 - Optional: click **Find Alternative** on a card. Lifeline proposes the next-best option, or says none is available.
 
 ### 5. Network tab again (30 sec)
@@ -43,9 +45,11 @@ The volunteer you approved now shows **Busy · En route**, with the trip and an 
 
 ### 6. Resident view (1.5 min)
 - Click **Resident view** at the top.
-- Type: *"My grandmother needs insulin and our power is out."* Then submit.
-- The resident immediately sees what Lifeline understood: need, priority, number of people, power. They also see whether a volunteer was matched or the request is queued.
+- Type: *"There are 3 kids here and we are hungry."* Then submit.
+- The resident immediately sees what Lifeline understood: need, priority, number of people, power. They also see which volunteer is lined up, and that the trip is waiting for coordinator approval.
 - Talking point: *"Residents just write in plain language. No forms."*
+- Optional second request: *"My dad is diabetic and needs insulin, the power is out."* This one is **queued** with "No facility has enough spare stock", because all the insulin is already being moved. Once the approved insulin reaches Community Center D, Lifeline proposes a delivery for it automatically. *"Nothing gets lost; it's served as soon as the supply exists."*
+- Avoid writing your own insulin requests before the insulin trip completes; they will always queue.
 
 ### 7. Back to the coordinator (1.5 min)
 - Click **Coordinator view**, then **Actions**.
@@ -53,7 +57,7 @@ The volunteer you approved now shows **Busy · En route**, with the trip and an 
 - Open the **Requests** tab. **Incoming Requests · Priority Ranked** lists every resident request, most urgent first, with a timestamp and status.
 
 ### 8. Closing (1 min)
-- Optional: if at least a few minutes have passed at 5× speed, show that the approved trip now has a **Completed** row in Action History and the volunteer is free again.
+- Optional: about 4 minutes after approving (at 5× speed), the insulin trip gets a **Completed** row in Action History. In the Network tab that volunteer is no longer Busy; usually Lifeline has already lined them up for the next proposal, so they show **Assigned**.
 - Optional: stop the backend with Ctrl+C, start it again, and refresh the page. Everything is still there: *"State is saved to a database, so nothing is lost on a restart."*
 - Finish on the **Impact** tab.
 
@@ -73,13 +77,13 @@ The volunteer you approved now shows **Busy · En route**, with the trip and an 
 **Display-only** (don't present these as working features):
 - **Impact tab:** the numbers are fixed demo numbers, not calculated from what you did.
 - **Disconnect Cloud / Edge Mode:** only changes the look; it doesn't actually switch modes. "Synchronizing 7 events" is scripted text.
-- **The "Amazon Bedrock Analysis" label:** locally, requests are understood by the built-in keyword rules (`source: rules`). Real Bedrock (Nova) only runs when the backend has `USE_BEDROCK=true` and AWS credentials. Test this before the demo if you want to say "Bedrock".
+- **The "Amazon Bedrock Analysis" panel title:** locally, requests are understood by the built-in keyword rules. The panel says "Local rules parser", and the resident screen says "Lifeline understood your request". Real Bedrock (Nova) only runs when the backend has `USE_BEDROCK=true` and AWS credentials. Test this before the demo if you want to say "Bedrock".
 - **Status popups during Simulate:** the narration is scripted. The cards and clocks that follow are real.
 - **Mission clock in the top bar and the scrolling ticker:** decorative only.
 
 ## Backup tips
 
-- If a card or request doesn't show up, look for the small dot next to "Cloud Online" at the top. If it says the backend is offline, the page has fallen back to its built-in demo cards. Restart the backend and refresh.
+- If a card or request doesn't show up, check the **API** pill at the top right. Green means connected; red means the backend is offline and the page has fallen back to its built-in demo cards. Restart the backend and refresh.
 - With only 5 volunteers, the third or fourth resident request may end up under **Waiting Requests**. That's normal; declining a low-priority card frees a volunteer.
 - To reset at any time, just click **Simulate** again.
 - Use requests the parser understands. It looks for one of five needs: insulin/medicine, water, food, blankets. Some good ones:
