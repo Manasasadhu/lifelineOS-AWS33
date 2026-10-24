@@ -214,7 +214,7 @@ img { max-width: 100%; }
   .qitem:hover { background: var(--surface-2); }
   .qitem .qt { min-width: 0; flex: 1; } .qitem .qt .n { font-weight: 600; font-size: 13px; } .qitem .qt .d { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .gauge { position: relative; width: 58px; height: 58px; flex: none; }
-  .gauge svg { width: 58px; height: 58px; transform: rotate(-90deg); } .gauge .gtrack { stroke: var(--ring-track); }
+  .gauge svg { width: 58px; height: 58px; transform: rotate(-90deg); overflow: visible; } .gauge .gtrack { stroke: var(--ring-track); }
   .gauge .gprog { stroke: var(--c, var(--good)); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .4s; filter: drop-shadow(0 0 4px var(--c, var(--good))); }
   .gauge .gt { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 11px; color: var(--c, var(--good)); }
   .sev.crit { --c: var(--crit); } .sev.risk { --c: var(--risk); } .sev.warn { --c: var(--warn); } .sev.good { --c: var(--good); }
@@ -255,13 +255,25 @@ img { max-width: 100%; }
   .interp .ok { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-top: 1px solid var(--border); color: var(--good); font-size: 12.5px; font-weight: 600; background: var(--good-bg); }
 
   .actionwrap { max-width: 660px; }
+  .topbar .switch { white-space: nowrap; }
+  .action .ah .astamp { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--fg); opacity: .8; white-space: nowrap; }
+  .waitlist { margin-bottom: 16px; }
+  .wrow { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .wrow .badge { text-transform: capitalize; flex: none; margin-top: 1px; }
+  .wrow .wdet { min-width: 0; } .wrow .wt { font-weight: 600; font-size: 13px; } .wrow .wm { font-size: 11.5px; color: var(--muted); margin-top: 3px; } .wrow .wr { font-size: 11.5px; color: var(--warn); margin-top: 3px; }
+  .actiongrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
+  .actiongrid .actionwrap { max-width: none; min-width: 0; }
+  .actiongrid .loglist { position: sticky; top: 12px; margin-top: 0; max-height: calc(100vh - 140px); overflow: auto; }
+  .actiongrid table.hist { min-width: 0; }
+  .actiongrid table.hist td, .actiongrid table.hist th { padding: 10px 12px; }
+  @media (max-width: 860px) { .actiongrid { grid-template-columns: 1fr; } .actiongrid .loglist { position: static; max-height: none; } }
   .action { border: 1px solid var(--crit); border-radius: var(--radius); overflow: hidden; background: var(--glass); backdrop-filter: blur(8px); box-shadow: var(--shadow-sm); }
   .action .ah { display: flex; align-items: center; gap: 11px; padding: 13px 18px; background: var(--crit-bg); border-bottom: 1px solid var(--crit); }
   .action .ah .lab { font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: 12px; color: var(--crit); }
   .action .body { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
   .failblock { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .bigring { position: relative; width: 168px; height: 168px; } .bigring svg { width: 168px; height: 168px; transform: rotate(-90deg); }
-  .bigring .bt2 { stroke: var(--ring-track); } .bigring .bp { stroke: var(--crit); stroke-linecap: round; filter: drop-shadow(0 0 6px var(--crit)); transition: stroke-dashoffset 1s linear; }
+  .bigring { position: relative; width: 168px; height: 168px; } .bigring svg { width: 168px; height: 168px; transform: rotate(-90deg); overflow: visible; display: block; }
+  .bigring .bt2 { stroke: var(--ring-track); } .bigring .bp { stroke: var(--crit); stroke-linecap: round; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--crit) 55%, transparent)); transition: stroke-dashoffset 1s linear; }
   .bigring .ctr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .bigring .ctr .big { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--crit); letter-spacing: .02em; }
   .bigring .ctr .cap { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin-top: 3px; }
@@ -384,6 +396,8 @@ img { max-width: 100%; }
   .prow .pbody { flex: 1; min-width: 0; } .prow .ptext { font-weight: 600; font-size: 13px; } .prow .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; } .prow .pchips span { font-size: 10.5px; font-family: var(--mono); color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; }
   .prow .prat { font-size: 11.5px; color: var(--faint); } .prow .pscore { text-align: center; flex: none; font-family: var(--mono); font-weight: 700; font-size: 22px; color: var(--accent); } .prow .pscore small { display: block; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
   .logbody { display: flex; flex-direction: column; }
+  #historyWrap[hidden], #logBody[hidden] { display: none; }
+  table.net .vtask { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; }
   .logrow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); animation: slidein .4s ease; } .logrow:last-child { border-bottom: 0; }
   .logrow .lchk { width: 26px; height: 26px; border-radius: 50%; background: var(--good); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
   .logrow .ldet { flex: 1; min-width: 0; } .logrow .lt { font-weight: 600; font-size: 13px; } .logrow .lm { font-size: 11.5px; color: var(--muted); margin-top: 2px; } .logrow .ltime { font-family: var(--mono); font-size: 12px; color: var(--faint); flex: none; }
@@ -391,6 +405,36 @@ img { max-width: 100%; }
   .brand .orb, #entry .elogo .orb, .rbrand .orb, #boot .borb { background: url("assets/logo-icon.png") center/cover no-repeat; }
   .operator .av { background: url("assets/avatar.png") center 30%/cover no-repeat; color: transparent; font-size: 0; }
   .rbanner { width: 100%; height: 170px; object-fit: cover; object-position: center 58%; border-radius: var(--radius); display: block; }
+  /* calm / crisis */
+  .alert-crisis { display: none !important; }
+  #app.crisis .alert-calm { display: none !important; }
+  #app.crisis .alert-crisis { display: flex !important; }
+  .alert-calm { background: linear-gradient(90deg, var(--good-bg), transparent 80%); border-color: var(--good); }
+  .alert-calm .bolt, .alert-calm .live { color: var(--good); }
+  .alert-calm .blink { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .alert-calm::after { display: none; }
+  #app:not(.crisis) .tile.crit { --tc: var(--good); border-color: var(--border); background: var(--glass); }
+  #app:not(.crisis) .tile.crit .v { color: var(--fg); }
+  .qcalm { padding: 26px 16px; text-align: center; color: var(--good); font-size: 13px; font-weight: 600; }
+  #app:not(.crisis) .map .pharma .bg, #app:not(.crisis) .map .food .bg, #app:not(.crisis) .map .shelter .bg { fill: var(--good-bg) !important; stroke: var(--good) !important; }
+  #app:not(.crisis) .map .pharma .code, #app:not(.crisis) .map .food .code, #app:not(.crisis) .map .shelter .code { fill: var(--good) !important; }
+  #app:not(.crisis) .map .crisis-only { display: none; }
+  #app.pharma-ok .map .pharma .bg { fill: rgba(47,217,138,.14) !important; stroke: var(--good) !important; }
+  #app.pharma-ok .map .pharma .code { fill: var(--good) !important; }
+  #app.pharma-ok .map .pharma-pulse { display: none !important; }
+  .map .pharma-secured { display: none; }
+  #app.pharma-ok .map .pharma-secured { display: inline; }
+  /* radar ops display */
+  .map .street { stroke: var(--radar-ring); stroke-width: 1; fill: none; opacity: .5; }
+  .map .mesh { stroke: var(--accent); stroke-width: 1; opacity: .15; stroke-dasharray: 3 7; animation: flow 1.4s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -10; } }
+  .map .blip { fill: none; stroke: var(--accent); stroke-width: 1.4; animation: ping 3.2s ease-out infinite; }
+  @keyframes ping { 0% { r: 19px; opacity: .5; } 100% { r: 35px; opacity: 0; } }
+  .map .hud { fill: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; opacity: .72; }
+  .map .hud-dim { fill: var(--faint); font-family: var(--mono); font-size: 8.5px; letter-spacing: .1em; opacity: .62; }
+  .map .scandot { animation: blink 1.4s steps(2) infinite; }
+  .map .rrange { fill: var(--faint); font-family: var(--mono); font-size: 8px; opacity: .55; }
+  @media (prefers-reduced-motion: reduce) { .map .blip { animation: none; opacity: .3; } }
 
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .05s !important; } #boot .bfill { width: 100% } }
 

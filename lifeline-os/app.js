@@ -142,11 +142,15 @@
   function fmt(s) { if (s < 0) s = 0; var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60, p = function (n) { return (n < 10 ? "0" : "") + n; }; return p(h) + ":" + p(m) + ":" + p(x); }
   function colorFor(s) { return s < 3600 ? "var(--crit)" : s < 10800 ? "var(--risk)" : s < 21600 ? "var(--warn)" : "var(--good)"; }
   var R = 24, C = 2 * Math.PI * R;
-  var gauges = $$(".gauge").map(function (el) {
-    var secs = parseInt(el.getAttribute("data-secs"), 10), total = parseInt(el.getAttribute("data-total"), 10) || secs;
-    el.innerHTML = '<svg viewBox="0 0 58 58"><circle class="gtrack" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5"/><circle class="gprog" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5" stroke-dasharray="' + C + '" stroke-dashoffset="0"/></svg><div class="gt"></div>';
-    return { prog: el.querySelector(".gprog"), txt: el.querySelector(".gt"), secs: secs, total: total };
-  });
+  var gauges = [];
+  function buildGauges() {
+    gauges = $$(".gauge").map(function (el) {
+      var secs = parseInt(el.getAttribute("data-secs"), 10), total = parseInt(el.getAttribute("data-total"), 10) || secs;
+      if (!el.querySelector("svg")) el.innerHTML = '<svg viewBox="0 0 58 58"><circle class="gtrack" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5"/><circle class="gprog" cx="29" cy="29" r="' + R + '" fill="none" stroke-width="5" stroke-dasharray="' + C + '" stroke-dashoffset="0"/></svg><div class="gt"></div>';
+      return { prog: el.querySelector(".gprog"), txt: el.querySelector(".gt"), secs: secs, total: total };
+    });
+  }
+  buildGauges();
   var BR = 74, BC = 2 * Math.PI * BR;
   $$(".bp").forEach(function (b) { b.setAttribute("stroke-dasharray", BC); });
   var simpleClocks = $$(".clock").filter(function (c) { return !c.closest(".gauge"); }).map(function (el) {
@@ -268,6 +272,17 @@
     if (ctx && $("#scrCtx")) $("#scrCtx").textContent = "San José · Simulation Day 01 · " + ctx;
   }
 
+  var CRISIS_QUEUE = '<div class="qitem sev crit"><div class="qt"><div class="n">Insulin · Pharmacy A</div><div class="d">Refrigeration failing — 25 doses</div></div><div class="gauge" data-secs="2598" data-total="3600"></div></div>'
+    + '<div class="qitem sev risk"><div class="qt"><div class="n">Food Bank B</div><div class="d">243 meals at spoilage risk</div></div><div class="gauge" data-secs="5040" data-total="7200"></div></div>'
+    + '<div class="qitem sev risk"><div class="qt"><div class="n">Water Depot G</div><div class="d">1,200 residents on supply</div></div><div class="gauge" data-secs="8100" data-total="12000"></div></div>'
+    + '<div class="qitem sev warn"><div class="qt"><div class="n">Shelter C Food Supply</div><div class="d">Serving 40 residents</div></div><div class="gauge" data-secs="18000" data-total="21600"></div></div>';
+  var crisisOn = false;
+  function enterCrisis() {
+    if (crisisOn) return; crisisOn = true;
+    $("#app").classList.add("crisis");
+    $$("#app [data-crisis]").forEach(function (el) { el.dataset.done = ""; el.setAttribute("data-count", el.getAttribute("data-crisis")); countTo(el); });
+    var q = $("#queue"); if (q) { q.innerHTML = CRISIS_QUEUE; buildGauges(); }
+  }
   var simRun = false;
   $("#simBtn").addEventListener("click", function () {
     if (simRun) return; simRun = true; var btn = this; btn.setAttribute("disabled", "");
@@ -275,18 +290,19 @@
     showIncident(sc.title, sc.sub, sc.ctx);
     $("#app").classList.add("shake"); setTimeout(function () { $("#app").classList.remove("shake"); }, 520);
     $("#flash").classList.remove("on"); void $("#flash").offsetWidth; $("#flash").classList.add("on");
+    enterCrisis();
     if (window.__quake) window.__quake();
     beep(140, .5, "sawtooth", .06); setTimeout(function () { beep(110, .4, "sawtooth", .05); }, 160);
     var steps = sc.steps.concat([["good", "AUTOPILOT", "Highest-impact intervention queued — awaiting operator approval"]]);
     steps.forEach(function (s, i) { setTimeout(function () { toast(s[0], s[1], s[2]);
-      if (i === 0) { var c = $("#tCrit"); c.textContent = parseInt(c.textContent, 10) + 1; }
-      if (i === steps.length - 1) { btn.removeAttribute("disabled"); simRun = false; $("#navBadge").classList.remove("hide"); } }, 1100 * (i + 1)); });
+      if (i === steps.length - 1) { btn.removeAttribute("disabled"); simRun = false; $("#navBadge").classList.remove("hide"); } }, 950 * (i + 1)); });
   });
 
   /* ---------- Approve ---------- */
   function inc(id, n) { var el = $(id); if (!el) return; el.dataset.done = ""; el.setAttribute("data-count", parseInt(el.getAttribute("data-count"), 10) + n); var sc = el.closest(".impact"); if (sc && sc.classList.contains("show")) countTo(el); }
   $("#approveBtn").addEventListener("click", function () {
     $("#action").classList.add("done");
+    $("#app").classList.add("pharma-ok");
     inc("#mDoses", 25); inc("#mPeople", 1); inc("#mReq", 1);
     addLog("Insulin transfer · Pharmacy A → Community Center D", "25 doses protected · Volunteer #04");
     burst(); chord([523, 659, 784]); toast("good", "Action Dispatched", "Volunteer #04 en route · 25 doses protected");
@@ -441,19 +457,66 @@
     initGauges(q);
   }
 
+  var VOL_BADGE = {
+    available: { label: "Available", c: "var(--accent)" },
+    assigned: { label: "Assigned", c: "var(--warn)" },
+    busy: { label: "Busy · En route", c: "var(--crit)" }
+  };
+
   function renderNetwork(st) {
-    var tb = $("table.net tbody"); if (!tb) return;
+    var tb = $("table.net:not(.hist) tbody"); if (!tb) return;
     tb.innerHTML = (st.facilities || []).map(function (f) {
+      var isVol = f.type === "volunteer";
       var cls = SEV_CLASS[f.status] || "good";
-      var label = f.type === "volunteer" ? "Available" : (SEV_LABEL[f.status] || "Stable");
-      var resource = f.inventory && f.inventory.length ? (f.inventory[0].quantity + " " + f.inventory[0].unit) : (f.type === "volunteer" ? "Vehicle" : (f.notes || "—"));
-      var power = f.type === "volunteer" ? "—" : (f.power ? "Grid" : "Battery");
+      var resource = f.inventory && f.inventory.length ? (Math.round(f.inventory[0].quantity) + " " + f.inventory[0].unit) : (isVol ? (f.notes || "Vehicle") : (f.notes || "—"));
+      var power = isVol ? "—" : (f.power ? "Grid" : "Battery");
       var secs = f.failureAt ? Math.max(0, Math.round((Date.parse(f.failureAt) - Date.now()) / 1000)) : (f.refrigerationHoursRemaining != null ? Math.round(f.refrigerationHoursRemaining * 3600) : null);
-      var time = f.type === "volunteer" ? "—" : fmtClock(secs);
-      var badge = f.type === "volunteer"
-        ? '<span class="badge" style="--c:var(--accent);--cb:color-mix(in srgb,var(--accent) 14%,transparent)"><span class="bd"></span>Available</span>'
-        : '<span class="badge sev ' + cls + '"><span class="bd"></span>' + label + '</span>';
-      return '<tr><td>' + f.name + '</td><td>' + badge + '</td><td>' + resource + '</td><td>' + power + '</td><td class="tleft">' + time + '</td></tr>';
+      // For a busy volunteer failureAt is their arrival time.
+      var time = isVol ? (f.volunteerStatus === "busy" && f.failureAt ? "arrives " + fmtClock(secs) : "—") : fmtClock(secs);
+      var vb = VOL_BADGE[f.volunteerStatus || (f.available === false ? "busy" : "available")];
+      var badge = isVol
+        ? '<span class="badge" style="--c:' + vb.c + ';--cb:color-mix(in srgb,' + vb.c + ' 14%,transparent)"><span class="bd"></span>' + vb.label + '</span>'
+        : '<span class="badge sev ' + cls + '"><span class="bd"></span>' + (SEV_LABEL[f.status] || "Stable") + '</span>';
+      var name = esc(f.name) + (isVol && f.task ? '<span class="vtask">' + esc(f.task) + '</span>' : "");
+      return '<tr><td>' + name + '</td><td>' + badge + '</td><td>' + esc(resource) + '</td><td>' + power + '</td><td class="tleft">' + time + '</td></tr>';
+    }).join("");
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+
+  function fmtWhen(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  /* Top-right stamp on an action card: when the resident asked, or when Lifeline proposed it. */
+  function stampHtml(a) {
+    var at = a.requestedAt || a.createdAt;
+    if (!at) return "";
+    return '<span class="astamp" title="' + esc(new Date(at).toString()) + '">' + (a.requestedAt ? "Requested " : "Proposed ") + esc(fmtWhen(at)) + '</span>';
+  }
+
+  var HIST_COLOR = { "Approved": "var(--good)", "Completed": "var(--accent)", "Declined": "var(--crit)", "Alternative requested": "var(--warn)" };
+
+  /* Action History table (Name · Action taken · Volunteer · Date) from /state.history. */
+  function renderHistory(st) {
+    var wrap = $("#historyWrap"), tb = $("#historyBody"), log = $("#logBody");
+    if (!wrap || !tb) return;
+    wrap.hidden = false;
+    if (log) log.hidden = true;
+    var rows = st.history || [];
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="4" style="color:var(--muted);text-align:center">No actions taken yet. Approve or decline a proposal to see it here.</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(function (h) {
+      var c = HIST_COLOR[h.decision] || "var(--muted)";
+      var when = new Date(h.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      return '<tr title="' + esc(h.detail) + '"><td>' + esc(h.name) + '</td>' +
+        '<td><span class="badge" style="--c:' + c + ';--cb:color-mix(in srgb,' + c + ' 14%,transparent)"><span class="bd"></span>' + esc(h.decision) + '</span></td>' +
+        '<td>' + esc(h.volunteer || "—") + '</td><td class="tleft">' + esc(when) + '</td></tr>';
     }).join("");
   }
 
@@ -493,23 +556,42 @@
   /* Render the Actions screen from real backend actions, binding real IDs. */
   function renderActions(st) {
     var wrap = $(".actionwrap"); if (!wrap) return;
-    var actions = (st.actions || []).filter(function (a) {
-      return a.status === "pending" || a.status === "approved" || a.status === "completed";
-    });
-    var pendingCount = actions.filter(function (a) { return a.status === "pending"; }).length;
+    renderHistory(st);
+    // Only proposals awaiting a decision; approved / declined / completed ones move to Action History.
+    var actions = (st.actions || []).filter(function (a) { return a.status === "pending"; });
 
     var badge = $("#navBadge");
     if (badge) {
-      if (pendingCount > 0) { badge.textContent = pendingCount; badge.classList.remove("hide"); }
+      if (actions.length > 0) { badge.textContent = actions.length; badge.classList.remove("hide"); }
       else badge.classList.add("hide");
     }
 
+    // Open requests with no proposal yet (e.g. every volunteer is busy) — show them so they aren't invisible.
+    var proposedFor = {};
+    actions.forEach(function (a) { proposedFor[a.toFacilityId] = true; });
+    var waiting = (st.requests || []).filter(function (r) { return r.status === "open" && !proposedFor[r.id]; });
+
+    var sig = actions.map(function (a) { return a.id; }).concat(waiting.map(function (r) { return r.id + ":" + (r.waitingReason || ""); })).join("|");
+    if (sig === renderActions.sig && wrap.querySelector("[data-live]")) return;
+    renderActions.sig = sig;
+
+    var waitingHtml = waiting.length ? '<div class="panel waitlist" data-live>' +
+      '<div class="head"><h3>Waiting Requests</h3><div class="meta">' + waiting.length + ' not yet matched</div></div>' +
+      waiting.slice().reverse().map(function (r) {
+        var urg = r.urgency === "critical" || r.urgency === "high" ? "crit" : "warn";
+        return '<div class="wrow"><span class="badge sev ' + urg + '"><span class="bd"></span>' + esc(r.urgency) + '</span>' +
+          '<div class="wdet"><div class="wt">\u201c' + esc(r.rawText) + '\u201d</div>' +
+          '<div class="wm">' + esc(r.id) + ' · ' + esc(r.need) + ' · ' + esc(r.people) + ' people · ' + esc(r.location) + ' · ' + esc(fmtWhen(r.createdAt)) + '</div>' +
+          '<div class="wr">' + esc(r.waitingReason || "Looking for a volunteer") + '</div></div></div>';
+      }).join("") + '</div>' : "";
+
     if (!actions.length) {
-      wrap.innerHTML = '<div class="action"><div class="body" style="padding:28px;text-align:center;color:var(--muted)">No interventions queued. Run a simulation or submit a request.</div></div>';
+      wrap.innerHTML = waitingHtml + '<div class="action" data-live><div class="body" style="padding:28px;text-align:center;color:var(--muted)">No proposals waiting for approval.' +
+        (waiting.length ? " The requests above get a proposal as soon as a volunteer is free (see the Network tab)." : " Past decisions are in Action History.") + '</div></div>';
       return;
     }
 
-    wrap.innerHTML = actions.map(function (a) {
+    wrap.innerHTML = waitingHtml + actions.map(function (a) {
       var cls = ACT_SEV_CLASS[a.severity] || "warn";
       var done = a.status !== "pending";
       var fromName = facilityNameOf(st, a.fromFacilityId);
@@ -517,14 +599,14 @@
       var driver = a.driverId ? facilityNameOf(st, a.driverId) : "unassigned";
       var cold = a.coldStorageHoursRemaining != null ? Math.round(a.coldStorageHoursRemaining) + " hrs" : "\u2014";
       return '' +
-        '<div class="action' + (done ? " done" : "") + '" data-action-id="' + a.id + '">' +
-          '<div class="ah"><svg class="bolt" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--' + cls + ')" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span class="lab">' + (ACT_SEV_LABEL[a.severity] || "Action") + " \u00b7 " + a.item + '</span></div>' +
+        '<div class="action' + (done ? " done" : "") + '" data-live data-action-id="' + a.id + '">' +
+          '<div class="ah"><svg class="bolt" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--' + cls + ')" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span class="lab">' + (ACT_SEV_LABEL[a.severity] || "Action") + " \u00b7 " + a.item + '</span>' + stampHtml(a) + '</div>' +
           '<div class="body">' +
             '<div class="rec">' +
               '<div class="rl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg> Lifeline Recommendation</div>' +
-              '<div class="move">' + a.title + " \u2014 move " + a.quantity + " " + a.item + '</div>' +
+              '<div class="move">' + a.title + " \u2014 move " + Math.round(a.quantity) + " " + a.item + '</div>' +
               '<div class="flow"><span class="node2">' + fromName + '</span><span class="arr">\u2192</span><span class="node2">' + toName + '</span></div>' +
-              '<div class="specs"><div class="sp"><span class="spk">Driver</span><span class="spv">' + driver + '</span></div><div class="sp"><span class="spk">Distance</span><span class="spv">' + a.distanceMiles + ' mi</span></div><div class="sp"><span class="spk">ETA</span><span class="spv">' + a.etaMinutes + ' min</span></div><div class="sp"><span class="spk">Cold storage</span><span class="spv">' + cold + '</span></div></div>' +
+              '<div class="specs"><div class="sp"><span class="spk">Driver</span><span class="spv">' + driver + '</span></div><div class="sp"><span class="spk">Distance</span><span class="spv">' + (Math.round(a.distanceMiles * 10) / 10) + ' mi</span></div><div class="sp"><span class="spk">ETA</span><span class="spv">' + a.etaMinutes + ' min</span></div><div class="sp"><span class="spk">Cold storage</span><span class="spv">' + cold + '</span></div></div>' +
             '</div>' +
             '<div class="whybox"><div class="wh">Why this action?</div><ul class="why"><li>' + (a.reason || "") + '</li><li>Estimated impact: ' + a.estimatedImpact + '</li></ul><div class="trustrow"><span class="vf">\u2713 Verified resources</span><span class="vf">\u2713 Human approval required</span></div></div>' +
             '<div class="impactline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> Estimated impact: ' + a.estimatedImpact + '</div>' +
@@ -535,9 +617,33 @@
     }).join("");
   }
 
+  var URG_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+  var REQ_STATUS = { open: ["Waiting", "warn"], matched: ["Volunteer assigned", "good"], resolved: ["Resolved", "good"] };
+
+  /* Requests tab: every live request, most urgent first, with where it stands. */
+  function renderRequestList(st) {
+    var q = $("#prioq"); if (!q) return;
+    var reqs = (st.requests || []).slice().sort(function (a, b) {
+      return (URG_RANK[a.urgency] - URG_RANK[b.urgency]) || (a.id < b.id ? 1 : -1);
+    });
+    if (!reqs.length) { q.innerHTML = '<div class="prioEmpty">No requests yet. Submit one above or from the Resident view.</div>'; return; }
+    var pending = {};
+    (st.actions || []).forEach(function (a) { if (a.status === "pending") pending[a.toFacilityId] = true; });
+    q.innerHTML = reqs.map(function (r, i) {
+      var s = r.status === "open" && pending[r.id] ? ["Awaiting approval", "warn"] : (REQ_STATUS[r.status] || REQ_STATUS.open);
+      var note = r.status === "open" && !pending[r.id] ? (r.waitingReason || "Looking for a volunteer") : "";
+      return '<div class="prow ' + (i === 0 ? "r1" : "r2") + '"><div class="rank">#' + (i + 1) + '</div><div class="pbody">' +
+        '<div class="ptext">\u201c' + esc(r.rawText) + '\u201d</div>' +
+        '<div class="pchips"><span>' + esc(r.need) + ' · ' + esc(r.urgency) + '</span><span>' + esc(r.people) + ' people</span><span>' + esc(r.id) + '</span><span>' + esc(fmtWhen(r.createdAt)) + '</span></div>' +
+        (note ? '<div class="prat">' + esc(note) + '</div>' : "") + '</div>' +
+        '<span class="badge sev ' + s[1] + '"><span class="bd"></span>' + s[0] + '</span></div>';
+    }).join("");
+  }
+
   function renderState(st) {
     if (!st) return;
     API.lastState = st;
+    if (API.live) renderRequestList(st);
     if (st.incident && st.incident.active) showIncident(st.incident.label, st.incident.description);
     renderTiles(st);
     renderQueue(st);
@@ -562,13 +668,16 @@
       apiFetch("/actions/" + encodeURIComponent(id) + "/" + op, { method: "POST" })
         .then(function (st) {
           renderState(st);
+          var driver = act && act.driverId ? facilityNameOf(before, act.driverId) : "Volunteer";
           if (op === "approve") {
-            burst(); chord([523, 659, 784]); toast("good", "Action approved & dispatched", "Impact updated");
-            if (act) addLog(act.title + " · " + facilityNameOf(before, act.fromFacilityId) + " → " + facilityNameOf(before, act.toFacilityId),
-              act.estimatedImpact + (act.driverId ? " · " + facilityNameOf(before, act.driverId) : ""));
+            burst(); chord([523, 659, 784]);
+            toast("good", "Action approved & dispatched", driver + " is now busy · see Action History");
           }
-          else if (op === "decline") toast("warn", "Action declined", "Escalated to human coordinator");
-          else toast("", "Alternative generated", "Next-best option proposed");
+          else if (op === "decline") toast("warn", "Action declined", "Request removed from the queue and logged in Action History");
+          else {
+            var next = (st.actions || []).filter(function (a) { return a.status === "pending"; }).length;
+            toast("", "Alternative requested", next ? "Next-best option proposed" : "No other option available right now");
+          }
         })
         .catch(function (err) {
           $$(".abtn", card).forEach(function (b) { b.removeAttribute("disabled"); });
@@ -588,8 +697,10 @@
     });
   }
 
-  /* On boot: try to attach to the backend. */
+  /* On boot: try to attach to the backend, then poll so volunteer status,
+   * trip completions and the history table update without a reload. */
   loadState();
+  setInterval(function () { if (API.live && !document.hidden) loadState(); }, 5000);
 
   /* Make the Simulate button call the real endpoint (in addition to the
    * existing cosmetic shake/flash/toast flourish already bound above). */
@@ -616,26 +727,6 @@
     row.querySelector(".lt").textContent = title; row.querySelector(".lm").textContent = meta; row.querySelector(".ltime").textContent = t;
     body.insertBefore(row, body.firstChild);
   }
-  var prioData = [
-    { rank: 1, cls: "r1", text: "“Grandmother needs insulin, power out” — Downtown", chips: ["Medical · Urgency 5", "1 person", "Fails in 42m", "1.2 mi"], score: 94, rat: "Medical-critical with a 42-min failure window — handled first." },
-    { rank: 2, cls: "r2", text: "“Shelter has 40 people, food until tonight” — East Side", chips: ["Food · Urgency 3", "40 people", "Fails in 5h", "2.0 mi"], score: 71, rat: "Larger group, but a 5-hour window — queued second." }
-  ];
-  var prioBtn = $("#prioBtn");
-  if (prioBtn) prioBtn.addEventListener("click", function () {
-    var q = $("#prioq"); if (!q) return; q.innerHTML = "";
-    prioData.forEach(function (d, i) {
-      setTimeout(function () {
-        var r = document.createElement("div"); r.className = "prow " + d.cls;
-        r.innerHTML = '<div class="rank">#' + d.rank + '</div><div class="pbody"><div class="ptext"></div><div class="pchips">' + d.chips.map(function () { return "<span></span>"; }).join("") + '</div><div class="prat"></div></div><div class="pscore">' + d.score + '<small>score</small></div>';
-        r.querySelector(".ptext").textContent = d.text; r.querySelector(".prat").textContent = d.rat;
-        var cs = r.querySelectorAll(".pchips span"); d.chips.forEach(function (c, k) { cs[k].textContent = c; });
-        q.appendChild(r);
-      }, i * 450);
-    });
-    toast("", "2 requests received simultaneously", "Priority engine ranking by urgency × people × time-to-failure");
-    beep(520, .08, "sine", .04);
-  });
-
   /* ---------- Role select + resident view ---------- */
   function showRole(role) {
     $("#entry").hidden = true;
@@ -647,6 +738,9 @@
   $$("#entry .ecard").forEach(function (c) { c.addEventListener("click", function () { showRole(c.getAttribute("data-role")); beep(560, .09, "sine", .045); }); });
   var sw = $("#switchBtn"); if (sw) sw.addEventListener("click", toEntry);
   $$("[data-switch]").forEach(function (b) { b.addEventListener("click", toEntry); });
+  $$("[data-goto]").forEach(function (b) {
+    b.addEventListener("click", function () { showRole(b.getAttribute("data-goto")); window.scrollTo(0, 0); beep(560, .09, "sine", .045); });
+  });
 
   var rSubmit = $("#rSubmit");
   function showResidentStatus(need, urg, urgC, ppl, pow, powC, matchText) {

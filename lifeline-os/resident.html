@@ -126,11 +126,10 @@
     }).then(function (r) { return r.json(); })
       .then(function (res) {
         var p = res.parsed || {};
-        document.getElementById("reqOkMsg").textContent =
-          "Understood: " + (p.need || "your request") + (p.urgency ? " · priority " + p.urgency : "") + ". A coordinator is arranging help.";
-        var reqs = res.state && res.state.requests;
-        var id = reqs && reqs.length ? reqs[reqs.length - 1].id : null;
-        done(id);
+        document.getElementById("reqOkMsg").textContent = res.requestId
+          ? "Understood: " + (p.need || "your request") + (p.urgency ? " · priority " + p.urgency : "") + ". A coordinator is arranging help."
+          : "We couldn't tell what you need. Please mention food, water, medicine, shelter or blankets and try again.";
+        done(res.requestId || null);
       })
       .catch(function () {
         document.getElementById("reqOkMsg").textContent = "We couldn't reach the network. Your request was saved and will send when the connection returns.";

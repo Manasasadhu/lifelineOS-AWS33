@@ -9,3 +9,4 @@ cdk.out/
 .DS_Store
 .aws-sam/
 coverage/
+backend/.data/

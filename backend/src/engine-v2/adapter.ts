@@ -23,11 +23,14 @@ import {
   Severity,
   WorldState,
 } from "../types";
+import { realSeconds } from "./clock";
+import type { HistoryEntry } from "./db";
+import { volunteerRows } from "./volunteers";
 
 /** Wall-clock anchor: sim time is minutes; we project failures onto real time
  * so the frontend countdowns (which use remainingSeconds / failureAt) keep working. */
 function failureAtFromMinutes(minutesRemaining: number): string {
-  return new Date(Date.now() + minutesRemaining * 60_000).toISOString();
+  return new Date(Date.now() + realSeconds(minutesRemaining) * 1000).toISOString();
 }
 
 const STATUS_MAP: Record<V2Facility["status"], Severity> = {
@@ -87,21 +90,30 @@ function mapFacility(state: V2State, f: V2Facility): Facility {
 
 /** Volunteers live in a separate array in v2; the old shape modeled them as facilities. */
 function mapVolunteers(state: V2State): Facility[] {
-  return state.volunteers.map((v) => ({
-    id: v.id,
-    name: v.name,
-    type: "volunteer" as const,
-    status: (v.available ? "healthy" : "warning") as Severity,
-    lat: v.lat,
-    lng: v.lng,
-    power: true,
-    refrigerationHoursRemaining: null,
-    failureAt: null,
-    inventory: [],
-    peopleServed: 0,
-    available: v.available,
-    notes: v.hasCooler ? "Refrigerated vehicle" : v.vehicle,
-  }));
+  const rows = new Map(volunteerRows(state).map((r) => [r.id, r]));
+  return state.volunteers.map((v) => {
+    const row = rows.get(v.id)!;
+    const active = row.status === "busy" ? state.actions.find((a) => a.id === row.currentActionId) : undefined;
+    const arrivesInSeconds =
+      active?.completesAt !== undefined ? realSeconds(Math.max(0, active.completesAt - state.simTime)) : null;
+    return {
+      id: v.id,
+      name: v.name,
+      type: "volunteer" as const,
+      status: (row.status === "available" ? "healthy" : "warning") as Severity,
+      lat: v.lat,
+      lng: v.lng,
+      power: true,
+      refrigerationHoursRemaining: null,
+      failureAt: arrivesInSeconds !== null ? new Date(Date.now() + arrivesInSeconds * 1000).toISOString() : null,
+      inventory: [],
+      peopleServed: 0,
+      available: row.status !== "busy",
+      volunteerStatus: row.status,
+      task: row.task,
+      notes: v.hasCooler ? "Refrigerated vehicle" : v.vehicle,
+    };
+  });
 }
 
 const ACTION_SEVERITY: Record<string, Action["severity"]> = {
@@ -111,7 +123,7 @@ const ACTION_SEVERITY: Record<string, Action["severity"]> = {
   low: "warning",
 };
 
-function mapAction(state: V2State, a: V2Action): Action {
+function mapAction(state: V2State, a: V2Action, stamps: Record<string, string>): Action {
   const sev = ACTION_SEVERITY[a.scoreBreakdown?.urgency ?? "medium"] ?? "warning";
   const toId = a.toFacilityId ?? a.toRequestId ?? "";
   const cold = a.toFacilityId ? worstColdClock(state, a.toFacilityId) : undefined;
@@ -134,7 +146,8 @@ function mapAction(state: V2State, a: V2Action): Action {
     coldStorageHoursRemaining: cold ? cold.minutesRemaining / 60 : null,
     estimatedImpact: impactParts.join(" · ") || a.explanation,
     status: mapActionStatus(a.status),
-    createdAt: new Date().toISOString(),
+    createdAt: stamps[a.id] ?? new Date().toISOString(),
+    ...(a.toRequestId && stamps[a.toRequestId] ? { requestedAt: stamps[a.toRequestId] } : {}),
     explanation: a.explanation,
   };
 }
@@ -217,7 +230,7 @@ function mapAlerts(state: V2State): Alert[] {
       severity: CLOCK_SEVERITY_MAP[c.severity],
       title: facilityName(state, c.facilityId),
       subtitle: c.label,
-      remainingSeconds: Math.round(c.minutesRemaining * 60),
+      remainingSeconds: realSeconds(c.minutesRemaining),
       facilityId: c.facilityId,
     }));
 }
@@ -227,11 +240,15 @@ function facilityName(state: V2State, id: string): string {
 }
 
 /** The single translation entry point: v2 EngineState -> public WorldState. */
-export function toWorldState(state: V2State): WorldState {
+export function toWorldState(
+  state: V2State,
+  history: HistoryEntry[] = [],
+  stamps: Record<string, string> = {},
+): WorldState {
   const facilities = [...state.facilities.map((f) => mapFacility(state, f)), ...mapVolunteers(state)];
   const actions = state.actions
     .filter((a) => a.status !== "completed" || a.itemKind != null)
-    .map((a) => mapAction(state, a));
+    .map((a) => mapAction(state, a, stamps));
   return {
     version: state.eventLog.length,
     connection: state.connection === "edge" ? "edge" : "cloud",
@@ -247,7 +264,7 @@ export function toWorldState(state: V2State): WorldState {
       powerAvailable: r.powerAvailable ?? null,
       location: r.locationLabel,
       source: "rules" as const,
-      createdAt: new Date().toISOString(),
+      createdAt: stamps[r.id] ?? new Date().toISOString(),
       status: r.status === "resolved" ? "resolved" : r.status === "open" ? "open" : "matched",
       ...(r.waitingReason ? { waitingReason: r.waitingReason } : {}),
     })),
@@ -257,5 +274,6 @@ export function toWorldState(state: V2State): WorldState {
       .filter((e) => !e.synced)
       .map((e) => ({ eventId: e.id, kind: "note" as const, payload: {}, createdAt: new Date().toISOString() })),
     logs: [],
+    history: [...history].reverse(),
   };
 }

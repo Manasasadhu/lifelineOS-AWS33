@@ -6,6 +6,7 @@
  */
 import type { ParsedRequest as EngineParsed } from "@lifeline/engine";
 import { ParsedRequest, WorldState } from "../types";
+import type { EngineState } from "@lifeline/engine";
 import { toWorldState } from "./adapter";
 import { parseWithBedrock } from "./bedrock";
 import { getEngineV2Store } from "./store";
@@ -22,29 +23,31 @@ function mapParsed(p: EngineParsed): ParsedRequest {
   };
 }
 
+const world = (state: EngineState): WorldState => toWorldState(state, getEngineV2Store().getHistory(), getEngineV2Store().getStamps());
+
 export async function getState(): Promise<WorldState> {
-  return toWorldState(getEngineV2Store().get());
+  return world(getEngineV2Store().get());
 }
 
 export async function getImpact(): Promise<WorldState["impact"]> {
-  return toWorldState(getEngineV2Store().get()).impact;
+  return world(getEngineV2Store().get()).impact;
 }
 
 export async function simulateDisaster(scenario?: string): Promise<WorldState> {
-  return toWorldState(getEngineV2Store().simulate(scenario));
+  return world(getEngineV2Store().simulate(scenario));
 }
 
 export async function simulateRoadClose(): Promise<WorldState> {
   // Every scripted scenario closes a road by T+6; advancing past it triggers the reroute.
-  return toWorldState(getEngineV2Store().advance(6));
+  return world(getEngineV2Store().advance(6));
 }
 
 export async function resetSimulation(): Promise<WorldState> {
-  return toWorldState(getEngineV2Store().reset());
+  return world(getEngineV2Store().reset());
 }
 
 export async function setConnection(mode: "cloud" | "edge"): Promise<WorldState> {
-  return toWorldState(getEngineV2Store().setConnection(mode));
+  return world(getEngineV2Store().setConnection(mode));
 }
 
 export async function submitRequest(
@@ -53,7 +56,7 @@ export async function submitRequest(
   // Try Bedrock (Amazon Nova) first; null → store uses the local keyword parser.
   const bedrock = await parseWithBedrock(text);
   const { state, parsed, request } = getEngineV2Store().submitRequest(text, bedrock ?? undefined);
-  return { parsed: mapParsed(parsed), state: toWorldState(state), requestId: request?.id };
+  return { parsed: mapParsed(parsed), state: world(state), requestId: request?.id };
 }
 
 export async function mutateAction(
@@ -63,7 +66,7 @@ export async function mutateAction(
   const store = getEngineV2Store();
   const state =
     op === "approve" ? store.approve(id) : op === "decline" ? store.decline(id) : store.alternative(id);
-  return toWorldState(state);
+  return world(state);
 }
 
 export async function syncOffline(
@@ -74,7 +77,7 @@ export async function syncOffline(
   const store = getEngineV2Store();
   const before = store.get().pendingSyncCount;
   const state = store.setConnection("cloud");
-  return { applied: before, state: toWorldState(state) };
+  return { applied: before, state: world(state) };
 }
 
 export function publicSummary(state: WorldState) {

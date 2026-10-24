@@ -30,6 +30,10 @@ export interface Facility {
   inventory: InventoryItem[];
   peopleServed: number;
   available?: boolean;
+  /** Volunteers only: available, assigned (on a pending proposal) or busy (on an approved trip). */
+  volunteerStatus?: "available" | "assigned" | "busy";
+  /** Volunteers only: the trip they are assigned to or driving. */
+  task?: string | null;
   notes?: string;
 }
 
@@ -48,7 +52,10 @@ export interface Action {
   coldStorageHoursRemaining: number | null;
   estimatedImpact: string;
   status: ActionStatus;
+  /** When the action was first proposed. */
   createdAt: string;
+  /** For actions serving a resident request: when that request was submitted. */
+  requestedAt?: string;
   explanation?: string;
   excludedDestinationIds?: string[];
 }
@@ -120,6 +127,18 @@ export interface WorldState {
   impact: Impact;
   offlineEvents: OfflineEvent[];
   logs: string[];
+  /** Past coordinator decisions and completed trips, newest first. */
+  history?: ActionHistoryEntry[];
+}
+
+export interface ActionHistoryEntry {
+  id: string;
+  at: string;
+  actionId: string;
+  name: string;
+  decision: "Approved" | "Declined" | "Alternative requested" | "Completed";
+  volunteer: string | null;
+  detail: string;
 }
 
 export interface ParsedRequest {

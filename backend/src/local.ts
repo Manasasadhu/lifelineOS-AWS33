@@ -1,6 +1,10 @@
+import path from "node:path";
 import cors from "cors";
 import express from "express";
 import { handleRequest } from "./http/router";
+
+// Persist engine v2 state across restarts. Set LIFELINE_DB=off to keep it in memory only.
+process.env.LIFELINE_DB ??= path.resolve(__dirname, "../.data/lifeline.db");
 
 const app = express();
 app.use(cors());
@@ -19,4 +23,5 @@ const port = Number(process.env.PORT ?? 3001);
 app.listen(port, () => {
   console.log(`Lifeline OS API (local) http://localhost:${port}`);
   console.log(`GET  /state   POST /simulate   POST /requests   GET /contract`);
+  if (process.env.LIFELINE_DB !== "off") console.log(`DB   ${process.env.LIFELINE_DB}`);
 });
