@@ -77,8 +77,11 @@
 (function () {
   "use strict";
   var API_BASE = (function () {
-    try { var q = new URLSearchParams(location.search).get("api"); if (q) return q.replace(/\/$/, ""); } catch (e) {}
-    return "http://localhost:3001";
+    try {
+      var q = new URLSearchParams(location.search).get("api"); if (q) return q.replace(/\/$/, "");
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return "http://localhost:3001";
+    } catch (e) {}
+    return "https://1ojsa0r13d.execute-api.us-west-2.amazonaws.com";
   })();
   var live = false;
   var dot = document.getElementById("apiDot");

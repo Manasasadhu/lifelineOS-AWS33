@@ -1,0 +1,12 @@
+version: 1
+frontend:
+  phases:
+    build:
+      commands: []
+  artifacts:
+    # Serve the static frontend in lifeline-os/ as the site root.
+    baseDirectory: lifeline-os
+    files:
+      - '**/*'
+  cache:
+    paths: []

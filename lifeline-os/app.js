@@ -12,8 +12,13 @@
     try {
       var q = new URLSearchParams(location.search).get("api");
       if (q) return q.replace(/\/$/, "");
+      // Local dev convenience: use localhost when served from localhost.
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        return "http://localhost:3001";
+      }
     } catch (e) {}
-    return "http://localhost:3001";
+    // Default for hosted builds: the deployed AWS API.
+    return "https://1ojsa0r13d.execute-api.us-west-2.amazonaws.com";
   })();
   var API = { live: false, lastState: null };
 
